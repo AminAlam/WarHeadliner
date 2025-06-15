@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react'
 import axios from 'axios'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import { format } from 'date-fns'
@@ -9,6 +9,7 @@ import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import html2canvas from 'html2canvas'
 import io from 'socket.io-client'
+import Select from 'react-select';
 
 const socket = io({ path: '/socket.io' });
 
@@ -252,7 +253,7 @@ const IncidentCard = React.memo(({
           {/* First row: Time, Title, Channel */}
           <div className="incident-first-row">
             <div className="incident-time">
-              {formatTime(new Date(incident.message_timestamp), 'HH:mm')}
+              {formatTime(new Date(incident.message_timestamp), 'yyyy-MM-dd HH:mm:ss')}
             </div>
             <div 
               className="incident-type-text"
@@ -294,7 +295,7 @@ const IncidentCard = React.memo(({
 })
 
 // Enhanced Marker component with realistic fade effects
-const EnhancedMarker = React.memo(({ event, style }) => {
+const EnhancedMarker = React.memo(({ event, style, popupMedia }) => {
   const map = useMap()
   const [markerId] = useState(() => `marker-${event.id}`)
   const [marker, setMarker] = useState(null)
@@ -389,20 +390,31 @@ const EnhancedMarker = React.memo(({ event, style }) => {
       iconAnchor: [style.radius, style.radius]
     })
     
-    // Parse media for popup - for now just show first 3 files, filtering will be done by the components
-    const rawFileIds = event.media && event.media.trim() !== '' 
-      ? event.media.split(';').filter(fileId => fileId.trim() !== '').map(fileId => fileId.trim()).slice(0, 3)
+    // Parse media for popup
+    const mediaFiles = event.media && event.media.trim() !== '' 
+      ? event.media.split(';').filter(fileId => fileId.trim() !== '').map(fileId => {
+          const isVideo = isVideoFileId(fileId.trim())
+          return {
+            fileId: fileId.trim(),
+            url: `/api/media/${fileId.trim()}`,
+            isVideo
+          }
+        })
       : []
     
-    const mediaHtml = rawFileIds.length > 0 
+    // Store media files in the ref for access from the global function
+    if (mediaFiles.length > 0) {
+      popupMedia.current[event.id] = mediaFiles
+    }
+
+    const mediaHtml = mediaFiles.length > 0 
       ? `<div class="popup-media">
-           ${rawFileIds.map(fileId => {
-             const isVideo = isVideoFileId(fileId)
-             return isVideo 
-               ? `<div class="popup-video-thumb" onclick="window.open('/api/media/${fileId}', '_blank')">
-                    <video src="/api/media/${fileId}" muted preload="metadata" class="popup-media-video" 
+           ${mediaFiles.map((media, index) => {
+             return media.isVideo 
+               ? `<div class="popup-video-thumb" onclick="window.openPopupGallery('${event.id}', ${index})">
+                    <video src="${media.url}" muted preload="metadata" class="popup-media-video" 
                            onerror="
-                             console.warn('Popup video failed to load:', '${fileId}');
+                             console.warn('Popup video failed to load:', '${media.fileId}');
                              this.style.display='none';
                              const placeholder = document.createElement('div');
                              placeholder.innerHTML = '📹';
@@ -411,8 +423,8 @@ const EnhancedMarker = React.memo(({ event, style }) => {
                            "></video>
                     <div class="popup-video-play">▶</div>
                   </div>`
-               : `<img src="/api/media/${fileId}" alt="Media" class="popup-media-img" 
-                       onclick="window.open('/api/media/${fileId}', '_blank')"
+               : `<img src="${media.url}" alt="Media" class="popup-media-img" 
+                       onclick="window.openPopupGallery('${event.id}', ${index})"
                        onerror="this.style.display='none'"
                        onload="
                          const aspectRatio = Math.min(this.naturalWidth / this.naturalHeight, this.naturalHeight / this.naturalWidth);
@@ -431,8 +443,8 @@ const EnhancedMarker = React.memo(({ event, style }) => {
           ${mediaHtml}
           <div class="popup-header">
             <strong>${getEventType(event)}</strong>
-            <span class="popup-time">
-              ${format(new Date(event.message_timestamp), 'HH:mm')}
+            <span className="popup-time">
+              ${format(new Date(event.message_timestamp), 'yyyy-MM-dd HH:mm:ss')}
             </span>
           </div>
           <div class="popup-body">
@@ -577,6 +589,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState(24)
   const [typeFilter, setTypeFilter] = useState('')
+  const [channelFilter, setChannelFilter] = useState([])
+  const [allChannels, setAllChannels] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activePanel, setActivePanel] = useState('stats')
   const [language, setLanguage] = useState('fa')
@@ -597,6 +611,7 @@ function App() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
+  const popupMedia = useRef({})
 
   // Mobile performance detection
   const isMobile = useMemo(() => {
@@ -622,10 +637,24 @@ function App() {
   }, [language])
 
   useEffect(() => {
+    // Expose a function to window for the popup onclick handlers
+    window.openPopupGallery = (eventId, startIndex) => {
+      const media = popupMedia.current[eventId]
+      if (media) {
+        openGallery(media, startIndex)
+      }
+    }
+    // Cleanup
+    return () => {
+      delete window.openPopupGallery
+    }
+  }, []) // Empty dependency array ensures this runs only once
+
+  useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, performanceMode.reducedUpdateFrequency)
     return () => clearInterval(interval)
-  }, [timeFilter, typeFilter, performanceMode.reducedUpdateFrequency])
+  }, [timeFilter, typeFilter, channelFilter, performanceMode.reducedUpdateFrequency])
 
   const fetchData = async () => {
     try {
@@ -634,21 +663,26 @@ function App() {
         params.hours = timeFilter
       }
       if (typeFilter) params.types = typeFilter
+      if (channelFilter.length > 0) {
+        params.channels = channelFilter.map(c => c.value).join(',')
+      }
 
       const statsParams = {}
       if (timeFilter !== 'all') {
         statsParams.hours = timeFilter
       }
 
-      const [eventsRes, statsRes, messagesRes] = await Promise.all([
+      const [eventsRes, statsRes, messagesRes, channelsRes] = await Promise.all([
         axios.get('/api/events', { params }),
         axios.get('/api/stats', { params: statsParams }),
-        axios.get('/api/messages', { params: { limit: 10, page: 1 } })
+        axios.get('/api/messages', { params: { limit: 10, page: 1 } }),
+        axios.get('/api/channels')
       ])
 
       setEvents(eventsRes.data)
       setStats(statsRes.data)
       setMessages(messagesRes.data)
+      setAllChannels(channelsRes.data.map(name => ({ value: name, label: name })))
       setMessagesPage(1)
       setHasMoreMessages(messagesRes.data.length === 10)
       setLoading(false)
@@ -938,9 +972,9 @@ function App() {
   // Update subscription when filters change
   useEffect(() => {
     if (socket) {
-      socket.emit('subscribe', { hours: timeFilter, types: typeFilter });
+      socket.emit('subscribe', { hours: timeFilter, types: typeFilter, channels: channelFilter.map(c => c.value) });
     }
-  }, [timeFilter, typeFilter, socket]);
+  }, [timeFilter, typeFilter, channelFilter, socket]);
 
   const exportMapImage = async () => {
     setIsExporting(true)
@@ -1260,6 +1294,19 @@ function App() {
                    <option value="unknown_explosion">{t('unknownExplosions')}</option>
                  </select>
                </div>
+
+               <div className="filter-group">
+                 <label>{t('channel')}</label>
+                 <Select
+                   isMulti
+                   name="channels"
+                   options={allChannels}
+                   className="channel-select-container"
+                   classNamePrefix="channel-select"
+                   value={channelFilter}
+                   onChange={setChannelFilter}
+                 />
+               </div>
              </div>
            )}
         </div>
@@ -1358,8 +1405,9 @@ function App() {
           >
             <MapRef onBoundsChange={handleBoundsChange} />
             <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              className="map-tiles"
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             />
             {events
               .filter(event => {
@@ -1380,7 +1428,7 @@ function App() {
               .map((event) => {
                 const style = getIncidentStyle(event)
                 return (
-                  <EnhancedMarker key={event.id} event={event} style={style} />
+                  <EnhancedMarker key={event.id} event={event} style={style} popupMedia={popupMedia} />
                 )
               })}
           </MapContainer>

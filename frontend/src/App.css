@@ -594,6 +594,77 @@ body {
   color: #e2e8f0;
 }
 
+/* Channel Select (React-Select) */
+.channel-select-container {
+  margin-top: 0.5rem;
+}
+
+.channel-select__control {
+  background-color: rgba(100, 116, 139, 0.2) !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.375rem !important;
+  box-shadow: none !important;
+  transition: all 0.3s ease;
+}
+
+.channel-select__control--is-focused {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 1px #667eea !important;
+}
+
+.channel-select__multi-value {
+  background-color: #475569 !important;
+  border-radius: 0.25rem !important;
+}
+
+.channel-select__multi-value__label {
+  color: #e2e8f0 !important;
+  font-size: 0.8rem !important;
+}
+
+.channel-select__multi-value__remove {
+  color: #94a3b8 !important;
+}
+
+.channel-select__multi-value__remove:hover {
+  background-color: #667eea !important;
+  color: white !important;
+}
+
+.channel-select__menu {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.375rem !important;
+  z-index: 1002 !important; /* Ensure it's above other elements */
+}
+
+.channel-select__option {
+  background-color: transparent !important;
+  color: #cbd5e1 !important;
+  font-size: 0.9rem !important;
+}
+
+.channel-select__option--is-focused {
+  background-color: rgba(102, 126, 234, 0.2) !important;
+}
+
+.channel-select__option--is-selected {
+  background-color: #667eea !important;
+  color: white !important;
+}
+
+.channel-select__indicator-separator {
+  background-color: #334155 !important;
+}
+
+.channel-select__placeholder {
+  color: #94a3b8 !important;
+}
+
+.channel-select__input-container {
+  color: #e2e8f0 !important;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;
@@ -683,6 +754,10 @@ body {
 
 .main-map {
   border-radius: 1rem;
+}
+
+.map-tiles {
+  filter: brightness(2) contrast(1.1);
 }
 
 /* Motivational Banner on Map - Bottom Left (Hidden by default, only shown during export) */
@@ -813,8 +888,6 @@ body {
   border-top-color: white;
   animation: spin 1s ease-in-out infinite;
 }
-
-
 
 .legend-items {
   display: flex;
@@ -1014,6 +1087,7 @@ body {
 
   .sidebar.open {
     transform: translateX(0);
+    z-index: 1002;
   }
 
   .overlay {

@@ -75,7 +75,7 @@ app.get('/health', async (req, res) => {
 // Get all events with location for map display
 app.get('/api/events', async (req, res) => {
   try {
-    const { hours = 24, types } = req.query;
+    const { hours = 24, types, channels } = req.query;
     
     let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL 
                       AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
@@ -94,6 +94,13 @@ app.get('/api/events', async (req, res) => {
       
       if (typeFilters.length > 0) {
         whereClause += ` AND (${typeFilters.join(' OR ')})`;
+      }
+    }
+
+    if (channels) {
+      const channelFilters = channels.split(',').map(channel => `'${channel.replace(/'/g, "''")}'`);
+      if (channelFilters.length > 0) {
+        whereClause += ` AND channel_name IN (${channelFilters.join(',')})`;
       }
     }
 
@@ -123,6 +130,23 @@ app.get('/api/events', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching events:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all unique channel names
+app.get('/api/channels', async (req, res) => {
+  try {
+    const query = `
+      SELECT DISTINCT channel_name 
+      FROM messages 
+      WHERE channel_name IS NOT NULL 
+      ORDER BY channel_name
+    `;
+    const result = await executeQuery(query);
+    res.json(result.rows.map(row => row.channel_name));
+  } catch (error) {
+    console.error('Error fetching channels:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
