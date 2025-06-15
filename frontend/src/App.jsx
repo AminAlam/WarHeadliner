@@ -74,7 +74,8 @@ const IncidentCard = React.memo(({
   onSelect, 
   getIncidentStyle, 
   getEventType, 
-  formatTime 
+  formatTime,
+  onOpenGallery
 }) => {
   const handleClick = useCallback(() => {
     onSelect(incident)
@@ -83,37 +84,180 @@ const IncidentCard = React.memo(({
   const style = useMemo(() => getIncidentStyle(incident), [incident, getIncidentStyle])
   const eventType = useMemo(() => getEventType(incident), [incident, getEventType])
 
+  // Parse media field and create media URLs
+  const [filteredMedia, setFilteredMedia] = useState([])
+  const [mediaLoading, setMediaLoading] = useState(false)
+
+  const allMediaFiles = useMemo(() => {
+    if (!incident.media || incident.media.trim() === '') return []
+    
+    const fileIds = incident.media.split(';')
+      .filter(fileId => fileId.trim() !== '')
+      .map(fileId => fileId.trim())
+    
+    return fileIds.map(fileId => ({
+      fileId,
+      url: `/api/media/${fileId}`,
+      isVideo: isVideoFileId(fileId)
+    }))
+  }, [incident.media])
+
+  // Filter images by actual dimensions
+  useEffect(() => {
+    if (allMediaFiles.length === 0) {
+      setFilteredMedia([])
+      return
+    }
+
+    setMediaLoading(true)
+    const promises = allMediaFiles.map(media => {
+      if (media.isVideo) {
+        // Keep all videos
+        return Promise.resolve({ ...media, include: true })
+      }
+
+      // Check image dimensions
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          resolve({ 
+            ...media, 
+            include: img.width > 500,
+            width: img.width,
+            height: img.height
+          })
+        }
+        img.onerror = () => {
+          resolve({ ...media, include: false })
+        }
+        img.src = media.url
+      })
+    })
+
+    Promise.all(promises).then(results => {
+      const filtered = results.filter(result => result.include)
+      setFilteredMedia(filtered)
+      setMediaLoading(false)
+      
+      // Debug logging
+      console.log('Media filtering results:')
+      results.forEach(result => {
+        if (!result.isVideo) {
+          console.log(`Image ${result.fileId}: ${result.width}x${result.height} - ${result.include ? 'INCLUDED' : 'EXCLUDED'}`)
+        }
+      })
+    })
+  }, [allMediaFiles])
+
+  const mediaFiles = filteredMedia
+
+  const handleMediaClick = useCallback((e, index) => {
+    e.stopPropagation()
+    onOpenGallery(mediaFiles, index)
+  }, [mediaFiles, onOpenGallery])
+
   return (
     <div 
       className={`incident-card ${isSelected ? 'selected' : ''}`}
       onClick={handleClick}
     >
-      <div className="incident-card-header">
-        <div 
-          className="incident-type-indicator"
-          style={{ backgroundColor: style.color }}
-        ></div>
-        <div 
-          className="incident-type-text"
-          title={eventType}
-        >
-          {eventType}
+      <div className="incident-card-layout">
+        {/* Media section on the left */}
+        <div className="incident-media-section">
+          {mediaLoading && allMediaFiles.length > 0 && (
+            <div className="incident-media-loading">
+              <div className="media-loading-spinner"></div>
+              <span>Loading...</span>
+            </div>
+          )}
+          {!mediaLoading && mediaFiles.length > 0 && (
+            <div className="incident-media">
+              {mediaFiles.slice(0, 2).map((media, index) => (
+                <div key={media.fileId} className="media-item">
+                  {media.isVideo ? (
+                    <div className="video-thumbnail" onClick={(e) => handleMediaClick(e, index)}>
+                      <video 
+                        src={media.url} 
+                        muted
+                        onError={(e) => {
+                          e.target.parentElement.style.display = 'none'
+                        }}
+                      />
+                      <div className="video-play-icon">▶</div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={media.url} 
+                      alt={`Media ${index + 1}`}
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                      }}
+                      onClick={(e) => handleMediaClick(e, index)}
+                    />
+                  )}
+                </div>
+              ))}
+              {mediaFiles.length > 2 && (
+                <div 
+                  className="media-count"
+                  onClick={(e) => handleMediaClick(e, 0)}
+                >
+                  +{mediaFiles.length - 2}
+                </div>
+              )}
+            </div>
+          )}
+          {!mediaLoading && mediaFiles.length === 0 && (
+            <div className="no-media-placeholder">
+              <div 
+                className="incident-type-indicator"
+                style={{ backgroundColor: style.color }}
+              ></div>
+            </div>
+          )}
         </div>
-        <div className="incident-time">
-          {formatTime(new Date(incident.message_timestamp), 'HH:mm')}
+
+        {/* Text content on the right */}
+        <div className="incident-text-content">
+          {/* First row: Time, Title, Channel */}
+          <div className="incident-first-row">
+            <div className="incident-time">
+              {formatTime(new Date(incident.message_timestamp), 'HH:mm')}
+            </div>
+            <div 
+              className="incident-type-text"
+              title={eventType}
+            >
+              {eventType}
+            </div>
+            <div 
+              className="incident-channel"
+              title={incident.channel_name}
+            >
+              {incident.channel_name}
+            </div>
+          </div>
+
+          {/* Second row: Location and Message */}
+          <div className="incident-second-row">
+            <div 
+              className="incident-location"
+              title={incident.official_location || incident.extracted_location}
+            >
+              {incident.official_location || incident.extracted_location}
+            </div>
+            {incident.message_text && (
+              <div 
+                className="incident-message"
+                title={incident.message_text}
+              >
+                {incident.message_text.length > 100 
+                  ? incident.message_text.substring(0, 100) + '...' 
+                  : incident.message_text}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      <div 
-        className="incident-location"
-        title={incident.official_location || incident.extracted_location}
-      >
-        {incident.official_location || incident.extracted_location}
-      </div>
-      <div 
-        className="incident-channel"
-        title={incident.channel_name}
-      >
-        {incident.channel_name}
       </div>
     </div>
   )
@@ -215,10 +359,34 @@ const EnhancedMarker = React.memo(({ event, style }) => {
       iconAnchor: [style.radius, style.radius]
     })
     
+    // Parse media for popup - for now just show first 3 files, filtering will be done by the components
+    const rawFileIds = event.media && event.media.trim() !== '' 
+      ? event.media.split(';').filter(fileId => fileId.trim() !== '').map(fileId => fileId.trim()).slice(0, 3)
+      : []
+    
+    const mediaHtml = rawFileIds.length > 0 
+      ? `<div class="popup-media">
+           ${rawFileIds.map(fileId => {
+             const isVideo = isVideoFileId(fileId)
+             return isVideo 
+               ? `<div class="popup-video-thumb" onclick="window.open('/api/media/${fileId}', '_blank')">
+                    <video src="/api/media/${fileId}" muted class="popup-media-video" 
+                           onerror="this.parentElement.style.display='none'"></video>
+                    <div class="popup-video-play">▶</div>
+                  </div>`
+               : `<img src="/api/media/${fileId}" alt="Media" class="popup-media-img" 
+                       onclick="window.open('/api/media/${fileId}', '_blank')"
+                       onerror="this.style.display='none'"
+                       onload="if(this.naturalWidth <= 500) this.style.display='none'">`
+           }).join('')}
+         </div>`
+      : ''
+
     // Create marker only once
     const newMarker = L.marker([eventLat, eventLng], { icon: customIcon })
       .bindPopup(`
         <div class="popup-content">
+          ${mediaHtml}
           <div class="popup-header">
             <strong>${getEventType(event)}</strong>
             <span class="popup-time">
@@ -260,6 +428,15 @@ function getEventType(event) {
   if (event.is_unknown_explosion) return 'Unknown Explosion'
   return 'Other'
 }
+
+// Helper function to detect video files based on Telegram file ID patterns
+function isVideoFileId(fileId) {
+  // Telegram video file IDs typically start with 'BAA' or contain 'video' patterns
+  // This is a heuristic based on common Telegram file ID patterns
+  return fileId.startsWith('BAA') || fileId.includes('video') || fileId.startsWith('CgA')
+}
+
+// Simple approach: load all images and filter by actual dimensions
 
 // Translation object
 const translations = {
@@ -377,6 +554,7 @@ function App() {
   const [incidentsInView, setIncidentsInView] = useState([])
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
+  const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
 
   // Mobile performance detection
   const isMobile = useMemo(() => {
@@ -667,6 +845,53 @@ function App() {
   useEffect(() => {
     setBottomMenuDisplayCount(50)
   }, [incidentsInView.length])
+
+  // Gallery modal functions
+  const openGallery = (images, startIndex = 0) => {
+    setGalleryModal({ isOpen: true, images, currentIndex: startIndex })
+  }
+
+  const closeGallery = () => {
+    setGalleryModal({ isOpen: false, images: [], currentIndex: 0 })
+  }
+
+  const nextImage = () => {
+    setGalleryModal(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex + 1) % prev.images.length
+    }))
+  }
+
+  const prevImage = () => {
+    setGalleryModal(prev => ({
+      ...prev,
+      currentIndex: prev.currentIndex === 0 ? prev.images.length - 1 : prev.currentIndex - 1
+    }))
+  }
+
+  // Keyboard navigation for gallery
+  useEffect(() => {
+    if (!galleryModal.isOpen) return
+
+    const handleKeyPress = (e) => {
+      switch (e.key) {
+        case 'Escape':
+          closeGallery()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          prevImage()
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          nextImage()
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [galleryModal.isOpen])
 
 
 
@@ -1136,6 +1361,7 @@ function App() {
                     getIncidentStyle={getIncidentStyle}
                     getEventType={getEventType}
                     formatTime={format}
+                    onOpenGallery={openGallery}
                   />
                 ))}
                 
@@ -1150,6 +1376,48 @@ function App() {
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Gallery Modal */}
+          {galleryModal.isOpen && (
+            <div className="gallery-overlay" onClick={closeGallery}>
+              <div className="gallery-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="gallery-close" onClick={closeGallery}>×</button>
+                
+                {galleryModal.images.length > 1 && (
+                  <>
+                    <button className="gallery-nav gallery-prev" onClick={prevImage}>‹</button>
+                    <button className="gallery-nav gallery-next" onClick={nextImage}>›</button>
+                  </>
+                )}
+                
+                <div className="gallery-content">
+                  {galleryModal.images[galleryModal.currentIndex]?.isVideo ? (
+                    <video 
+                      src={galleryModal.images[galleryModal.currentIndex]?.url}
+                      controls
+                      autoPlay
+                      className="gallery-video"
+                      onError={(e) => {
+                        console.error('Video load error:', e)
+                      }}
+                    />
+                  ) : (
+                    <img 
+                      src={galleryModal.images[galleryModal.currentIndex]?.url} 
+                      alt={`Media ${galleryModal.currentIndex + 1}`}
+                      className="gallery-image"
+                    />
+                  )}
+                  
+                  {galleryModal.images.length > 1 && (
+                    <div className="gallery-counter">
+                      {galleryModal.currentIndex + 1} / {galleryModal.images.length}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

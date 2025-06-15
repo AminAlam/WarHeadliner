@@ -3,6 +3,7 @@ const { Client } = require('pg');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
+const axios = require('axios');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
@@ -99,7 +100,8 @@ app.get('/api/events', async (req, res) => {
         official_location,
         latitude,
         longitude,
-        channel_name
+        channel_name,
+        media
       FROM messages 
       ${whereClause}
       ORDER BY message_timestamp DESC
@@ -157,7 +159,8 @@ app.get('/api/messages', async (req, res) => {
         is_unknown_explosion,
         extracted_location,
         official_location,
-        channel_name
+        channel_name,
+        media
       FROM messages 
       ORDER BY message_timestamp DESC
       LIMIT $1
@@ -168,6 +171,75 @@ app.get('/api/messages', async (req, res) => {
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get media from Telegram API
+app.get('/api/media/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    
+    console.log('Received media request for fileId:', fileId);
+    console.log('Bot token configured:', !!botToken);
+    
+    if (!botToken) {
+      console.error('TELEGRAM_BOT_TOKEN environment variable not set');
+      return res.status(500).json({ error: 'Telegram bot token not configured' });
+    }
+    
+    // URL encode the file ID to handle special characters
+    const encodedFileId = encodeURIComponent(fileId);
+    const telegramApiUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${encodedFileId}`;
+    
+    console.log('Making request to Telegram API:', telegramApiUrl.replace(botToken, '[TOKEN]'));
+    
+    // Get file info from Telegram API
+    const fileInfoResponse = await axios.get(telegramApiUrl, {
+      timeout: 15000 // 15 second timeout
+    });
+    
+    console.log('Telegram API response:', fileInfoResponse.data);
+    
+    if (!fileInfoResponse.data.ok) {
+      console.error('Telegram API error:', fileInfoResponse.data);
+      return res.status(404).json({ 
+        error: 'File not found on Telegram',
+        telegramError: fileInfoResponse.data.description 
+      });
+    }
+    
+    const filePath = fileInfoResponse.data.result.file_path;
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    
+    console.log('Fetching file from:', fileUrl.replace(botToken, '[TOKEN]'));
+    
+    // Proxy the file from Telegram
+    const fileResponse = await axios.get(fileUrl, { 
+      responseType: 'stream',
+      timeout: 15000 // 15 second timeout
+    });
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', fileResponse.headers['content-type'] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    
+    console.log('Successfully proxying file, content-type:', fileResponse.headers['content-type']);
+    
+    // Pipe the file to response
+    fileResponse.data.pipe(res);
+    
+  } catch (error) {
+    console.error('Error fetching media:', error.message);
+    console.error('Error details:', {
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url?.replace(process.env.TELEGRAM_BOT_TOKEN || '', '[TOKEN]')
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch media',
+      details: error.message 
+    });
   }
 });
 
