@@ -172,6 +172,18 @@ body {
   font-size: 1.2rem;
 }
 
+/* GitHub link styling */
+.github-link {
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.3);
+  padding-top: 1rem !important;
+}
+
+.github-link:hover {
+  background: linear-gradient(135deg, #333 0%, #555 100%) !important;
+  color: white !important;
+}
+
 /* Panel Content */
 .panel-content {
   flex: 1;
@@ -480,7 +492,7 @@ body {
   border-radius: 1rem;
 }
 
-/* Motivational Banner on Map - Bottom Left (above watermark) */
+/* Motivational Banner on Map - Bottom Left (Hidden by default, only shown during export) */
 .motivational-banner-map {
   position: absolute;
   bottom: 5rem;
@@ -503,6 +515,12 @@ body {
   transition: all 0.3s ease;
   cursor: pointer;
   width: 280px;
+  display: none; /* Hidden by default */
+}
+
+/* Show banner only during export */
+.exporting .motivational-banner-map {
+  display: block !important;
 }
 
 .motivational-banner-map:hover {
@@ -1061,7 +1079,7 @@ body {
   }
 }
 
-/* Map Watermark - Bottom Left */
+/* Map Watermark - Bottom Left (Hidden by default, only shown during export) */
 .map-watermark {
   position: absolute;
   bottom: 1rem;
@@ -1075,6 +1093,12 @@ body {
   transition: all 0.3s ease;
   backdrop-filter: blur(5px);
   width: 280px;
+  display: none; /* Hidden by default */
+}
+
+/* Show watermark only during export */
+.exporting .map-watermark {
+  display: block !important;
 }
 
 .map-watermark:hover {
@@ -1098,33 +1122,33 @@ body {
   line-height: 1.2;
 }
 
-/* Mobile-specific overrides for watermark and banner visibility */
+/* Mobile-specific overrides for watermark and banner visibility (only during export) */
 @media (max-width: 768px) {
-  .map-watermark {
-    bottom: 0.75rem !important;
+  .exporting .map-watermark {
+    bottom: 150px !important;
     left: 0.5rem !important;
     padding: 0.4rem 0.6rem !important;
     width: 250px !important;
     z-index: 900 !important;
   }
 
-  .watermark-line1 {
+  .exporting .watermark-line1 {
     font-size: 0.7rem !important;
   }
 
-  .watermark-line2 {
+  .exporting .watermark-line2 {
     font-size: 0.65rem !important;
   }
 
-  .motivational-banner-map {
-    bottom: 3.5rem !important;
+  .exporting .motivational-banner-map {
+    bottom: 185px !important;
     left: 0.5rem !important;
     padding: 0.5rem !important;
     width: 250px !important;
     z-index: 900 !important;
   }
 
-  .motivational-banner-map span {
+  .exporting .motivational-banner-map span {
     font-size: 0.75rem !important;
   }
 
@@ -1142,31 +1166,31 @@ body {
 }
 
 @media (max-width: 480px) {
-  .map-watermark {
-    bottom: 0.5rem !important;
+  .exporting .map-watermark {
+    bottom: 130px !important;
     left: 0.25rem !important;
     padding: 0.3rem 0.5rem !important;
     width: 200px !important;
     z-index: 900 !important;
   }
 
-  .watermark-line1 {
+  .exporting .watermark-line1 {
     font-size: 0.65rem !important;
   }
 
-  .watermark-line2 {
+  .exporting .watermark-line2 {
     font-size: 0.6rem !important;
   }
 
-  .motivational-banner-map {
-    bottom: 3rem !important;
+  .exporting .motivational-banner-map {
+    bottom: 165px !important;
     left: 0.25rem !important;
     padding: 0.4rem !important;
     width: 200px !important;
     z-index: 900 !important;
   }
 
-  .motivational-banner-map span {
+  .exporting .motivational-banner-map span {
     font-size: 0.7rem !important;
   }
 
@@ -1183,4 +1207,345 @@ body {
   }
 }
 
- 
+/* Bottom Incident Bar */
+.bottom-incident-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.98) 100%);
+  backdrop-filter: blur(15px);
+  border-top: 1px solid rgba(100, 116, 139, 0.3);
+  max-height: 180px;
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  
+  /* Ensure it stays within safe areas on mobile */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  
+  /* Mobile performance optimizations */
+  will-change: transform;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+/* Mobile performance optimizations */
+@media (max-width: 768px) {
+  /* Reduce expensive operations on mobile */
+  .bottom-incident-bar {
+    backdrop-filter: blur(8px); /* Less intensive blur */
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2); /* Simpler shadow */
+  }
+  
+  .incident-card {
+    backdrop-filter: blur(5px); /* Reduce blur on mobile */
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15); /* Simpler shadow */
+  }
+  
+  .incident-card:hover {
+    transform: none; /* Disable hover transforms on mobile */
+  }
+  
+  /* Optimize animations */
+  .enhanced-marker.pulse {
+    animation: none; /* Disable pulse animations on mobile */
+  }
+  
+  .enhanced-marker:hover {
+    transform: none; /* Disable hover transforms */
+  }
+  
+  /* Optimize gradients */
+  .motivational-banner-map {
+    background: rgba(30, 41, 59, 0.8); /* Solid color instead of gradient */
+  }
+  
+  /* Optimize map performance on mobile */
+  .main-map {
+    transform: translateZ(0); /* Force hardware acceleration */
+  }
+  
+  /* Optimize sidebar on mobile */
+  .sidebar {
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  
+  /* Reduce expensive text shadows on mobile */
+  .motivational-banner-map span {
+    text-shadow: none;
+  }
+  
+  /* Simplify legend on mobile */
+  .map-legend {
+    backdrop-filter: blur(5px); /* Reduce blur */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* Simpler shadow */
+  }
+}
+
+.incident-bar-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.incident-bar-header h4 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.incident-bar-scroll {
+  padding: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  gap: 0.75rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.3) transparent;
+  
+  /* Mobile scroll optimizations */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  scroll-behavior: smooth;
+  will-change: scroll-position;
+}
+
+.incident-bar-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.incident-bar-scroll::-webkit-scrollbar-track {
+  background: rgba(100, 116, 139, 0.1);
+  border-radius: 3px;
+}
+
+.incident-bar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+}
+
+.incident-bar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+.incident-card {
+  flex: 0 0 280px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  min-width: 0; /* Allow flex item to shrink below content size */
+  
+  /* Performance optimizations */
+  will-change: transform;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+.incident-card:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(100, 116, 139, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.incident-card.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.incident-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.incident-type-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.incident-type-text {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.incident-time {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  background: rgba(100, 116, 139, 0.2);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+}
+
+.incident-location {
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.incident-channel {
+  color: #94a3b8;
+  font-size: 0.7rem;
+  background: rgba(100, 116, 139, 0.15);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Mobile optimizations for bottom incident bar */
+@media (max-width: 768px) {
+  .bottom-incident-bar {
+    max-height: 140px;
+    bottom: 0;
+    position: fixed;
+    z-index: 1001;
+  }
+  
+  .incident-card {
+    flex: 0 0 220px;
+    padding: 0.5rem;
+  }
+  
+  .incident-bar-header {
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .incident-bar-header h4 {
+    font-size: 0.8rem;
+  }
+  
+  .incident-bar-scroll {
+    padding: 0.5rem;
+    gap: 0.5rem;
+    max-height: 85px;
+  }
+  
+  /* Adjust map container to make room for bottom bar */
+  .map-container {
+    padding-bottom: 140px;
+    height: calc(100vh - 140px);
+  }
+  
+  /* Show watermark and banner positions during export on mobile */
+  .exporting .map-watermark {
+    bottom: 150px !important;
+  }
+  
+  .exporting .motivational-banner-map {
+    bottom: 185px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .bottom-incident-bar {
+    max-height: 120px;
+    bottom: 0;
+    position: fixed;
+    z-index: 1001;
+  }
+  
+  .incident-card {
+    flex: 0 0 180px;
+    padding: 0.4rem;
+  }
+  
+  .incident-bar-header {
+    padding: 0.4rem 0.5rem;
+  }
+  
+  .incident-bar-header h4 {
+    font-size: 0.75rem;
+  }
+  
+  .incident-bar-scroll {
+    padding: 0.4rem;
+    gap: 0.4rem;
+    max-height: 75px;
+  }
+  
+  .incident-type-text {
+    font-size: 0.7rem;
+  }
+  
+  .incident-location {
+    font-size: 0.65rem;
+  }
+  
+  .incident-channel {
+    font-size: 0.6rem;
+  }
+  
+  /* Adjust map container to make room for bottom bar */
+  .map-container {
+    padding-bottom: 120px;
+    height: calc(100vh - 120px);
+  }
+  
+  /* Show watermark and banner positions during export on small mobile */
+  .exporting .map-watermark {
+    bottom: 130px !important;
+  }
+  
+  .exporting .motivational-banner-map {
+    bottom: 165px !important;
+  }
+}
+
+/* Load More Button */
+.load-more-incidents {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+}
+
+.load-more-btn {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.load-more-btn:hover {
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.load-more-btn:active {
+  transform: translateY(0);
+}

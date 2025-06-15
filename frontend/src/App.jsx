@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import axios from 'axios'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import { format } from 'date-fns'
@@ -18,19 +18,117 @@ let DefaultIcon = L.divIcon({
 
 L.Marker.prototype.options.icon = DefaultIcon
 
-// Component to store map reference
-function MapRef() {
+// Component to store map reference and track bounds
+function MapRef({ onBoundsChange }) {
   const map = useMap()
+  
   useEffect(() => {
     window.leafletMapInstance = map
   }, [map])
+  
+  useEffect(() => {
+    if (!onBoundsChange) return
+    
+    // Debounce function to prevent excessive calls
+    let timeoutId = null
+    
+    const debouncedBoundsChange = () => {
+      if (timeoutId) clearTimeout(timeoutId)
+      const debounceTime = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 200 : 100
+      timeoutId = setTimeout(() => {
+        const bounds = map.getBounds()
+        if (bounds && bounds.isValid()) {
+          onBoundsChange(bounds)
+        }
+      }, debounceTime) // Longer debounce on mobile for better performance
+    }
+    
+    // Initial bounds after a short delay to ensure map is ready
+    const initialTimeout = setTimeout(() => {
+      const bounds = map.getBounds()
+      if (bounds && bounds.isValid()) {
+        onBoundsChange(bounds)
+      }
+    }, 500)
+    
+    // Listen for map move events
+    map.on('moveend', debouncedBoundsChange)
+    map.on('zoomend', debouncedBoundsChange)
+    
+    // Cleanup
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+      clearTimeout(initialTimeout)
+      map.off('moveend', debouncedBoundsChange)
+      map.off('zoomend', debouncedBoundsChange)
+    }
+  }, [map, onBoundsChange])
+  
   return null
 }
 
+// Memoized Incident Card component for better performance
+const IncidentCard = React.memo(({ 
+  incident, 
+  isSelected, 
+  onSelect, 
+  getIncidentStyle, 
+  getEventType, 
+  formatTime 
+}) => {
+  const handleClick = useCallback(() => {
+    onSelect(incident)
+  }, [incident, onSelect])
+
+  const style = useMemo(() => getIncidentStyle(incident), [incident, getIncidentStyle])
+  const eventType = useMemo(() => getEventType(incident), [incident, getEventType])
+
+  return (
+    <div 
+      className={`incident-card ${isSelected ? 'selected' : ''}`}
+      onClick={handleClick}
+    >
+      <div className="incident-card-header">
+        <div 
+          className="incident-type-indicator"
+          style={{ backgroundColor: style.color }}
+        ></div>
+        <div 
+          className="incident-type-text"
+          title={eventType}
+        >
+          {eventType}
+        </div>
+        <div className="incident-time">
+          {formatTime(new Date(incident.message_timestamp), 'HH:mm')}
+        </div>
+      </div>
+      <div 
+        className="incident-location"
+        title={incident.official_location || incident.extracted_location}
+      >
+        {incident.official_location || incident.extracted_location}
+      </div>
+      <div 
+        className="incident-channel"
+        title={incident.channel_name}
+      >
+        {incident.channel_name}
+      </div>
+    </div>
+  )
+})
+
 // Enhanced Marker component with realistic fade effects
-function EnhancedMarker({ event, style }) {
+const EnhancedMarker = React.memo(({ event, style }) => {
   const map = useMap()
-  const [markerId] = useState(() => `marker-${event.id}-${Date.now()}`)
+  const [markerId] = useState(() => `marker-${event.id}`)
+  const [marker, setMarker] = useState(null)
+  
+  // Create stable references to prevent unnecessary re-renders
+  const eventId = event.id
+  const eventLat = event.latitude
+  const eventLng = event.longitude
   
   useEffect(() => {
     // Create unique gradient ID for this marker
@@ -117,8 +215,8 @@ function EnhancedMarker({ event, style }) {
       iconAnchor: [style.radius, style.radius]
     })
     
-    // Create marker
-    const marker = L.marker([event.latitude, event.longitude], { icon: customIcon })
+    // Create marker only once
+    const newMarker = L.marker([eventLat, eventLng], { icon: customIcon })
       .bindPopup(`
         <div class="popup-content">
           <div class="popup-header">
@@ -135,20 +233,23 @@ function EnhancedMarker({ event, style }) {
         </div>
       `)
     
-    marker.addTo(map)
+    newMarker.addTo(map)
+    setMarker(newMarker)
     
     // Cleanup function
     return () => {
-      map.removeLayer(marker)
+      if (newMarker) {
+        map.removeLayer(newMarker)
+      }
       const gradientElement = document.getElementById(gradientId)
       if (gradientElement) {
         gradientElement.remove()
       }
     }
-  }, [event, style, map, markerId])
+  }, [eventId, eventLat, eventLng, map, markerId]) // Only re-create if essential props change
   
   return null
-}
+})
 
 // Helper function to get event type (moved outside component for reuse)
 function getEventType(event) {
@@ -199,11 +300,15 @@ const translations = {
     exportMap: 'Export Map',
     exportingMap: 'Exporting...',
     mapExported: 'Map exported successfully!',
-    motivationalMessage: 'Iranian people will win this fight'
+    motivationalMessage: 'Iranian people will win this fight',
+    incidentsInView: 'incidents in view',
+    showing: 'showing',
+    loadMore: 'Load More',
+    more: 'more'
   },
   fa: {
     appTitle: 'مانیتور جنگ ایران-اسرائیل',
-    sidebarTitle: 'وارهدلاینر',
+    sidebarTitle: 'مانیتور جنگ',
     statistics: 'آمار',
     messages: 'رویدادها',
     filters: 'فیلترها',
@@ -238,7 +343,11 @@ const translations = {
     exportMap: 'خروجی نقشه',
     exportingMap: 'در حال خروجی...',
     mapExported: 'نقشه با موفقیت ذخیره شد!',
-    motivationalMessage: 'مردم ایران در این نبرد پیروز خواهند شد'
+    motivationalMessage: 'مردم ایران در این نبرد پیروز خواهند شد',
+    incidentsInView: 'رویداد در نمایش',
+    showing: 'نمایش',
+    loadMore: 'بارگذاری بیشتر',
+    more: 'بیشتر'
   }
 }
 
@@ -264,6 +373,25 @@ function App() {
     other: false
   })
   const [isExporting, setIsExporting] = useState(false)
+  const [mapBounds, setMapBounds] = useState(null)
+  const [incidentsInView, setIncidentsInView] = useState([])
+  const [selectedIncident, setSelectedIncident] = useState(null)
+  const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
+
+  // Mobile performance detection
+  const isMobile = useMemo(() => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           window.innerWidth <= 768
+  }, [])
+  
+  // Performance flags for mobile
+  const performanceMode = useMemo(() => ({
+    reduceAnimations: isMobile,
+    simplifyMarkers: isMobile,
+    limitMarkers: isMobile ? 50 : 200, // Limit markers on mobile
+    reducedUpdateFrequency: isMobile ? 60000 : 30000, // Less frequent updates on mobile
+    optimizeScrolling: isMobile
+  }), [isMobile])
 
   // Translation helper function
   const t = (key) => translations[language][key] || key
@@ -275,9 +403,9 @@ function App() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000) // Refresh every 30 seconds
+    const interval = setInterval(fetchData, performanceMode.reducedUpdateFrequency)
     return () => clearInterval(interval)
-  }, [timeFilter, typeFilter])
+  }, [timeFilter, typeFilter, performanceMode.reducedUpdateFrequency])
 
   const fetchData = async () => {
     try {
@@ -310,71 +438,97 @@ function App() {
     }
   }
 
-  const getIncidentStyle = (event) => {
-    if (event.is_air_attack) return {
-      color: '#ef4444',
-      fillColor: '#ef4444',
-      fillOpacity: 0.4,
-      weight: 2,
-      radius: 7.5,
-      gradientColors: ['#ef4444', '#dc2626', '#b91c1c', 'rgba(239, 68, 68, 0.1)'],
-      pulseAnimation: true
+  // Memoized styles to prevent unnecessary re-renders with mobile optimizations
+  const incidentStyles = useMemo(() => {
+    const baseStyles = {
+      air_attack: {
+        color: '#ef4444',
+        fillColor: '#ef4444',
+        fillOpacity: 0.4,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 6 : 7.5,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#ef4444', '#dc2626'] 
+          : ['#ef4444', '#dc2626', '#b91c1c', 'rgba(239, 68, 68, 0.1)'],
+        pulseAnimation: !performanceMode.reduceAnimations
+      },
+      air_defence: {
+        color: '#3b82f6',
+        fillColor: '#3b82f6',
+        fillOpacity: 0.4,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 5 : 6,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#3b82f6', '#2563eb'] 
+          : ['#3b82f6', '#2563eb', '#1d4ed8', 'rgba(59, 130, 246, 0.1)'],
+        pulseAnimation: !performanceMode.reduceAnimations
+      },
+      electricity_shortage: {
+        color: '#f59e0b',
+        fillColor: '#f59e0b',
+        fillOpacity: 0.3,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 3 : 4,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#f59e0b', '#d97706'] 
+          : ['#f59e0b', '#d97706', '#b45309', 'rgba(245, 158, 11, 0.1)'],
+        pulseAnimation: false
+      },
+      water_shortage: {
+        color: '#8b5cf6',
+        fillColor: '#8b5cf6',
+        fillOpacity: 0.3,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 3 : 4,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#8b5cf6', '#7c3aed'] 
+          : ['#8b5cf6', '#7c3aed', '#6d28d9', 'rgba(139, 92, 246, 0.1)'],
+        pulseAnimation: false
+      },
+      unknown_explosion: {
+        color: '#6b7280',
+        fillColor: '#6b7280',
+        fillOpacity: 0.3,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 4 : 5,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#6b7280', '#4b5563'] 
+          : ['#6b7280', '#4b5563', '#374151', 'rgba(107, 114, 128, 0.1)'],
+        pulseAnimation: !performanceMode.reduceAnimations
+      },
+      other: {
+        color: '#64748b',
+        fillColor: '#64748b',
+        fillOpacity: 0.2,
+        weight: 2,
+        radius: performanceMode.simplifyMarkers ? 2 : 3,
+        gradientColors: performanceMode.simplifyMarkers 
+          ? ['#64748b', '#475569'] 
+          : ['#64748b', '#475569', '#334155', 'rgba(100, 116, 139, 0.1)'],
+        pulseAnimation: false
+      }
     }
-    if (event.is_air_defence) return {
-      color: '#3b82f6',
-      fillColor: '#3b82f6',
-      fillOpacity: 0.4,
-      weight: 2,
-      radius: 6,
-      gradientColors: ['#3b82f6', '#2563eb', '#1d4ed8', 'rgba(59, 130, 246, 0.1)'],
-      pulseAnimation: true
-    }
-    if (event.is_electricity_shortage) return {
-      color: '#f59e0b',
-      fillColor: '#f59e0b',
-      fillOpacity: 0.3,
-      weight: 2,
-      radius: 4,
-      gradientColors: ['#f59e0b', '#d97706', '#b45309', 'rgba(245, 158, 11, 0.1)'],
-      pulseAnimation: false
-    }
-    if (event.is_water_shortage) return {
-      color: '#8b5cf6',
-      fillColor: '#8b5cf6',
-      fillOpacity: 0.3,
-      weight: 2,
-      radius: 4,
-      gradientColors: ['#8b5cf6', '#7c3aed', '#6d28d9', 'rgba(139, 92, 246, 0.1)'],
-      pulseAnimation: false
-    }
-    if (event.is_unknown_explosion) return {
-      color: '#6b7280',
-      fillColor: '#6b7280',
-      fillOpacity: 0.3,
-      weight: 2,
-      radius: 5,
-      gradientColors: ['#6b7280', '#4b5563', '#374151', 'rgba(107, 114, 128, 0.1)'],
-      pulseAnimation: true
-    }
-    return {
-      color: '#64748b',
-      fillColor: '#64748b',
-      fillOpacity: 0.2,
-      weight: 2,
-      radius: 3,
-      gradientColors: ['#64748b', '#475569', '#334155', 'rgba(100, 116, 139, 0.1)'],
-      pulseAnimation: false
-    }
-  }
+    return baseStyles
+  }, [performanceMode])
 
-  const getIncidentTypeKey = (event) => {
+  const getIncidentStyle = useCallback((event) => {
+    if (event.is_air_attack) return incidentStyles.air_attack
+    if (event.is_air_defence) return incidentStyles.air_defence
+    if (event.is_electricity_shortage) return incidentStyles.electricity_shortage
+    if (event.is_water_shortage) return incidentStyles.water_shortage
+    if (event.is_unknown_explosion) return incidentStyles.unknown_explosion
+    return incidentStyles.other
+  }, [incidentStyles])
+
+  const getIncidentTypeKey = useCallback((event) => {
+    // Use priority order (most specific first) - for styling and primary categorization
     if (event.is_air_attack) return 'air_attack'
     if (event.is_air_defence) return 'air_defence'
     if (event.is_electricity_shortage) return 'electricity_shortage'
     if (event.is_water_shortage) return 'water_shortage'
     if (event.is_unknown_explosion) return 'unknown_explosion'
     return 'other'
-  }
+  }, [])
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -412,17 +566,119 @@ function App() {
     }
   }
 
-  const toggleIncidentType = (incidentType) => {
+  const toggleIncidentType = useCallback((incidentType) => {
     setVisibleIncidents(prev => ({
       ...prev,
       [incidentType]: !prev[incidentType]
     }))
+  }, [])
+
+  // Handle map bounds change to filter incidents in view
+  const handleBoundsChange = useCallback((bounds) => {
+    if (!bounds || !bounds.isValid()) return
+    
+    // Throttle bounds updates on mobile for better performance
+    const now = Date.now()
+    if (performanceMode.optimizeScrolling) {
+      if (handleBoundsChange.lastUpdate && now - handleBoundsChange.lastUpdate < 300) {
+        return // Skip update if too frequent on mobile
+      }
+      handleBoundsChange.lastUpdate = now
+    }
+    
+    setMapBounds(bounds)
+    
+    if (events.length > 0) {
+      try {
+        const incidentsInBounds = events
+          .filter(event => {
+            if (!event.latitude || !event.longitude) return false
+            const lat = parseFloat(event.latitude)
+            const lng = parseFloat(event.longitude)
+            if (isNaN(lat) || isNaN(lng)) return false
+            
+            const isInBounds = bounds.contains([lat, lng])
+            
+            // Check if ANY of the event's flags match visible incident types
+            const isVisible = (
+              (event.is_air_attack && visibleIncidents.air_attack) ||
+              (event.is_air_defence && visibleIncidents.air_defence) ||
+              (event.is_electricity_shortage && visibleIncidents.electricity_shortage) ||
+              (event.is_water_shortage && visibleIncidents.water_shortage) ||
+              (event.is_unknown_explosion && visibleIncidents.unknown_explosion) ||
+              (!event.is_air_attack && !event.is_air_defence && !event.is_electricity_shortage && 
+               !event.is_water_shortage && !event.is_unknown_explosion && visibleIncidents.other)
+            )
+            
+            return isInBounds && isVisible
+          })
+          // Don't limit here - we'll limit in the bottom menu display only
+        setIncidentsInView(incidentsInBounds)
+      } catch (error) {
+        console.warn('Error filtering incidents in bounds:', error)
+      }
+    }
+  }, [events, visibleIncidents, performanceMode, getIncidentTypeKey])
+
+  // Update incidents in view when events or visibility changes
+  useEffect(() => {
+    if (mapBounds && mapBounds.isValid && mapBounds.isValid() && events.length > 0) {
+      try {
+        const incidentsInBounds = events.filter(event => {
+          if (!event.latitude || !event.longitude) return false
+          const lat = parseFloat(event.latitude)
+          const lng = parseFloat(event.longitude)
+          if (isNaN(lat) || isNaN(lng)) return false
+          
+          // Check if ANY of the event's flags match visible incident types
+          const isVisible = (
+            (event.is_air_attack && visibleIncidents.air_attack) ||
+            (event.is_air_defence && visibleIncidents.air_defence) ||
+            (event.is_electricity_shortage && visibleIncidents.electricity_shortage) ||
+            (event.is_water_shortage && visibleIncidents.water_shortage) ||
+            (event.is_unknown_explosion && visibleIncidents.unknown_explosion) ||
+            (!event.is_air_attack && !event.is_air_defence && !event.is_electricity_shortage && 
+             !event.is_water_shortage && !event.is_unknown_explosion && visibleIncidents.other)
+          )
+          
+          return mapBounds.contains([lat, lng]) && isVisible
+        })
+        setIncidentsInView(incidentsInBounds)
+      } catch (error) {
+        console.warn('Error updating incidents in view:', error)
+      }
+    }
+  }, [events, visibleIncidents, mapBounds, getIncidentTypeKey])
+
+  // Handle incident selection from bottom bar
+  const handleIncidentSelect = (incident) => {
+    setSelectedIncident(incident)
+    if (window.leafletMapInstance) {
+      window.leafletMapInstance.setView([incident.latitude, incident.longitude], 12)
+    }
   }
+
+  // Handle load more incidents in bottom menu
+  const handleLoadMoreIncidents = () => {
+    setBottomMenuDisplayCount(prev => prev + 50)
+  }
+
+  // Reset bottom menu count when incidents change
+  useEffect(() => {
+    setBottomMenuDisplayCount(50)
+  }, [incidentsInView.length])
 
 
 
   const exportMapImage = async () => {
     setIsExporting(true)
+    
+    // Add exporting class to show watermark
+    const mapContainer = document.querySelector('.map-container')
+    if (!mapContainer) {
+      throw new Error('Map container not found')
+    }
+    mapContainer.classList.add('exporting')
     
     // Temporarily change only the banner text to English
     const bannerElement = document.querySelector('.motivational-banner-map span')
@@ -431,11 +687,6 @@ function App() {
     try {
       // Dynamically import html2canvas
       const html2canvas = (await import('html2canvas')).default
-      
-      const mapContainer = document.querySelector('.map-container')
-      if (!mapContainer) {
-        throw new Error('Map container not found')
-      }
 
       if (bannerElement) {
         originalBannerText = bannerElement.textContent
@@ -456,11 +707,14 @@ function App() {
       const leafletContainer = mapContainer.querySelector('.leaflet-container')
       const leafletMap = leafletContainer._leaflet_map || window.leafletMapInstance
 
-      // Temporarily hide only the export button (keep legend visible)
+      // Temporarily hide export button and bottom incident menu
       const exportBtn = document.querySelector('.export-btn')
+      const bottomMenu = document.querySelector('.bottom-incident-bar')
       const originalExportDisplay = exportBtn ? exportBtn.style.display : ''
+      const originalBottomMenuDisplay = bottomMenu ? bottomMenu.style.display : ''
       
       if (exportBtn) exportBtn.style.display = 'none'
+      if (bottomMenu) bottomMenu.style.display = 'none'
 
       // Wait a bit for any animations to complete
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -478,12 +732,14 @@ function App() {
         ignoreElements: (element) => {
           return element.classList.contains('export-btn') || 
                  element.classList.contains('export-spinner') ||
-                 element.classList.contains('export-icon')
+                 element.classList.contains('export-icon') ||
+                 element.classList.contains('bottom-incident-bar')
         }
       })
 
-      // Restore the export button
+      // Restore the export button and bottom menu
       if (exportBtn) exportBtn.style.display = originalExportDisplay
+      if (bottomMenu) bottomMenu.style.display = originalBottomMenuDisplay
 
       // Create final canvas
       const finalCanvas = document.createElement('canvas')
@@ -501,7 +757,18 @@ function App() {
         const mapSize = leafletMap.getSize()
         
         events
-          .filter(event => visibleIncidents[getIncidentTypeKey(event)])
+          .filter(event => {
+            // Check if ANY of the event's flags match visible incident types
+            return (
+              (event.is_air_attack && visibleIncidents.air_attack) ||
+              (event.is_air_defence && visibleIncidents.air_defence) ||
+              (event.is_electricity_shortage && visibleIncidents.electricity_shortage) ||
+              (event.is_water_shortage && visibleIncidents.water_shortage) ||
+              (event.is_unknown_explosion && visibleIncidents.unknown_explosion) ||
+              (!event.is_air_attack && !event.is_air_defence && !event.is_electricity_shortage && 
+               !event.is_water_shortage && !event.is_unknown_explosion && visibleIncidents.other)
+            )
+          })
           .forEach(event => {
             try {
               // Convert lat/lng to pixel coordinates
@@ -582,6 +849,8 @@ function App() {
         bannerElement.textContent = originalBannerText
       }
     } finally {
+      // Remove exporting class
+      mapContainer.classList.remove('exporting')
       setIsExporting(false)
     }
   }
@@ -639,6 +908,13 @@ function App() {
           >
             <span className="nav-icon">🔧</span>
             {t('filters')}
+          </button>
+          <button 
+            className="nav-item github-link"
+            onClick={() => window.open('https://github.com/AminAlam/WarHeadliner', '_blank')}
+          >
+            <span className="nav-icon">⚡</span>
+            GitHub
           </button>
         </nav>
 
@@ -759,8 +1035,8 @@ function App() {
             </div>
             <div className="legend-items">
               {Object.entries(visibleIncidents).map(([type, visible]) => {
-                const sampleEvent = { [`is_${type}`]: true }
-                const style = getIncidentStyle(sampleEvent)
+                // Get style directly from incidentStyles instead of creating a sample event
+                const style = incidentStyles[type] || incidentStyles.other
                 return (
                   <div key={type} className="legend-item">
                     <label className="legend-checkbox">
@@ -808,13 +1084,27 @@ function App() {
             style={{ height: '100%', width: '100%' }}
             className="main-map"
           >
-            <MapRef />
+            <MapRef onBoundsChange={handleBoundsChange} />
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
             {events
-              .filter(event => visibleIncidents[getIncidentTypeKey(event)])
+              .filter(event => {
+                // Check if ANY of the event's flags match visible incident types
+                const isVisible = (
+                  (event.is_air_attack && visibleIncidents.air_attack) ||
+                  (event.is_air_defence && visibleIncidents.air_defence) ||
+                  (event.is_electricity_shortage && visibleIncidents.electricity_shortage) ||
+                  (event.is_water_shortage && visibleIncidents.water_shortage) ||
+                  (event.is_unknown_explosion && visibleIncidents.unknown_explosion) ||
+                  (!event.is_air_attack && !event.is_air_defence && !event.is_electricity_shortage && 
+                   !event.is_water_shortage && !event.is_unknown_explosion && visibleIncidents.other)
+                )
+                
+                return isVisible
+              })
+              // Render ALL incidents on the map (no slice limit)
               .map((event) => {
                 const style = getIncidentStyle(event)
                 return (
@@ -822,6 +1112,47 @@ function App() {
                 )
               })}
           </MapContainer>
+
+          {/* Bottom Incident Bar */}
+          {incidentsInView.length > 0 && (
+            <div className="bottom-incident-bar">
+              <div className="incident-bar-header">
+                <h4>
+                  {incidentsInView.length} {t('incidentsInView')}
+                  {bottomMenuDisplayCount < incidentsInView.length && 
+                    ` (${t('showing')} ${bottomMenuDisplayCount})`
+                  }
+                </h4>
+              </div>
+              <div className="incident-bar-scroll">
+                {incidentsInView
+                  .slice(0, bottomMenuDisplayCount) // Show only up to bottomMenuDisplayCount
+                  .map((incident, index) => (
+                  <IncidentCard
+                    key={incident.id}
+                    incident={incident}
+                    isSelected={selectedIncident?.id === incident.id}
+                    onSelect={handleIncidentSelect}
+                    getIncidentStyle={getIncidentStyle}
+                    getEventType={getEventType}
+                    formatTime={format}
+                  />
+                ))}
+                
+                {/* Load More Button */}
+                {bottomMenuDisplayCount < incidentsInView.length && (
+                  <div className="load-more-incidents">
+                    <button 
+                      className="load-more-btn"
+                      onClick={handleLoadMoreIncidents}
+                    >
+                      {t('loadMore')} ({incidentsInView.length - bottomMenuDisplayCount} {t('more')})
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
