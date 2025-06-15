@@ -112,8 +112,32 @@ const IncidentCard = React.memo(({
     setMediaLoading(true)
     const promises = allMediaFiles.map(media => {
       if (media.isVideo) {
-        // Keep all videos
-        return Promise.resolve({ ...media, include: true })
+        // Validate video by trying to load metadata
+        return new Promise((resolve) => {
+          const video = document.createElement('video')
+          video.onloadedmetadata = () => {
+            // Check if video has reasonable dimensions
+            const aspectRatio = Math.min(video.videoWidth / video.videoHeight, video.videoHeight / video.videoWidth)
+            const hasValidDimensions = video.videoWidth >= 200 || video.videoHeight >= 150
+            const hasGoodRatio = aspectRatio >= 0.3
+            
+            resolve({ 
+              ...media, 
+              include: hasValidDimensions && hasGoodRatio,
+              width: video.videoWidth,
+              height: video.videoHeight,
+              aspectRatio: aspectRatio
+            })
+          }
+          video.onerror = () => {
+            resolve({ ...media, include: false })
+          }
+          // Set timeout to avoid hanging
+          setTimeout(() => {
+            resolve({ ...media, include: false })
+          }, 3000)
+          video.src = media.url
+        })
       }
 
       // Check image dimensions - More mobile-friendly filtering
@@ -188,8 +212,26 @@ const IncidentCard = React.memo(({
                       <video 
                         src={media.url} 
                         muted
+                        preload="metadata"
                         onError={(e) => {
-                          e.target.parentElement.style.display = 'none'
+                          // More graceful error handling - show placeholder instead of hiding
+                          console.warn('Video failed to load:', media.url)
+                          e.target.style.display = 'none'
+                          // Show error placeholder
+                          const placeholder = document.createElement('div')
+                          placeholder.className = 'video-error-placeholder'
+                          placeholder.innerHTML = '📹'
+                          placeholder.style.cssText = `
+                            width: 100%;
+                            height: 100%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            background: rgba(107, 114, 128, 0.3);
+                            border-radius: 0.5rem;
+                            font-size: 1.2rem;
+                          `
+                          e.target.parentElement.appendChild(placeholder)
                         }}
                       />
                       <div className="video-play-icon">▶</div>
@@ -379,8 +421,15 @@ const EnhancedMarker = React.memo(({ event, style }) => {
              const isVideo = isVideoFileId(fileId)
              return isVideo 
                ? `<div class="popup-video-thumb" onclick="window.open('/api/media/${fileId}', '_blank')">
-                    <video src="/api/media/${fileId}" muted class="popup-media-video" 
-                           onerror="this.parentElement.style.display='none'"></video>
+                    <video src="/api/media/${fileId}" muted preload="metadata" class="popup-media-video" 
+                           onerror="
+                             console.warn('Popup video failed to load:', '${fileId}');
+                             this.style.display='none';
+                             const placeholder = document.createElement('div');
+                             placeholder.innerHTML = '📹';
+                             placeholder.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(107,114,128,0.3);border-radius:0.375rem;font-size:1rem;';
+                             this.parentElement.appendChild(placeholder);
+                           "></video>
                     <div class="popup-video-play">▶</div>
                   </div>`
                : `<img src="/api/media/${fileId}" alt="Media" class="popup-media-img" 
