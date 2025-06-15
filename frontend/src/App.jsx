@@ -112,32 +112,8 @@ const IncidentCard = React.memo(({
     setMediaLoading(true)
     const promises = allMediaFiles.map(media => {
       if (media.isVideo) {
-        // Validate video by trying to load metadata
-        return new Promise((resolve) => {
-          const video = document.createElement('video')
-          video.onloadedmetadata = () => {
-            // Check if video has reasonable dimensions
-            const aspectRatio = Math.min(video.videoWidth / video.videoHeight, video.videoHeight / video.videoWidth)
-            const hasValidDimensions = video.videoWidth >= 200 || video.videoHeight >= 150
-            const hasGoodRatio = aspectRatio >= 0.3
-            
-            resolve({ 
-              ...media, 
-              include: hasValidDimensions && hasGoodRatio,
-              width: video.videoWidth,
-              height: video.videoHeight,
-              aspectRatio: aspectRatio
-            })
-          }
-          video.onerror = () => {
-            resolve({ ...media, include: false })
-          }
-          // Set timeout to avoid hanging
-          setTimeout(() => {
-            resolve({ ...media, include: false })
-          }, 3000)
-          video.src = media.url
-        })
+        // Keep all videos - let the player handle loading/errors
+        return Promise.resolve({ ...media, include: true })
       }
 
       // Check image dimensions - More mobile-friendly filtering
