@@ -168,7 +168,7 @@ const translations = {
     statistics: 'Statistics',
     messages: 'Messages', 
     filters: 'Filters',
-    totalMessages: 'Total Messages',
+    totalMessages: 'Total Incidents',
     airAttacks: 'Air Attacks',
     airDefence: 'Air Defence',
     electricityIssues: 'Electricity Issues',
@@ -205,15 +205,15 @@ const translations = {
     appTitle: 'مانیتور جنگ ایران-اسرائیل',
     sidebarTitle: 'وارهدلاینر',
     statistics: 'آمار',
-    messages: 'پیام‌ها',
+    messages: 'رویدادها',
     filters: 'فیلترها',
-    totalMessages: 'کل پیام‌ها',
+    totalMessages: 'کل رویدادها',
     airAttacks: 'حملات هوایی',
     airDefence: 'پدافند هوایی',
     electricityIssues: 'مشکلات برق',
     waterIssues: 'مشکلات آب',
     unknownExplosions: 'انفجارهای نامشخص',
-    recentMessages: 'پیام‌های اخیر',
+    recentMessages: 'رویدادهای اخیر',
     timeRange: 'بازه زمانی',
     eventType: 'نوع رویداد',
     allTypes: 'همه انواع',
@@ -227,7 +227,7 @@ const translations = {
     loading: 'در حال بارگذاری مانیتور وارهدلاینر...',
     location: 'موقعیت',
     channel: 'کانال',
-    message: 'پیام',
+    message: 'رویداد',
     time: 'زمان',
     language: 'زبان',
     loadMore: 'بارگذاری بیشتر',
@@ -238,7 +238,7 @@ const translations = {
     exportMap: 'خروجی نقشه',
     exportingMap: 'در حال خروجی...',
     mapExported: 'نقشه با موفقیت ذخیره شد!',
-    motivationalMessage: 'ملت ایران در این نبرد پیروز خواهد شد'
+    motivationalMessage: 'مردم ایران در این نبرد پیروز خواهند شد'
   }
 }
 
@@ -419,8 +419,15 @@ function App() {
     }))
   }
 
+
+
   const exportMapImage = async () => {
     setIsExporting(true)
+    
+    // Temporarily change only the banner text to English
+    const bannerElement = document.querySelector('.motivational-banner-map span')
+    let originalBannerText = ''
+    
     try {
       // Dynamically import html2canvas
       const html2canvas = (await import('html2canvas')).default
@@ -430,23 +437,35 @@ function App() {
         throw new Error('Map container not found')
       }
 
+      if (bannerElement) {
+        originalBannerText = bannerElement.textContent
+        bannerElement.textContent = translations.en.motivationalMessage
+        // Wait for banner text change to take effect
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+
+      // Ensure fonts are loaded before export
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready
+      }
+
+      // Add a small delay to ensure text is properly rendered
+      await new Promise(resolve => setTimeout(resolve, 200))
+
       // Get the leaflet map instance to get bounds and projection info
       const leafletContainer = mapContainer.querySelector('.leaflet-container')
       const leafletMap = leafletContainer._leaflet_map || window.leafletMapInstance
 
-      // Temporarily hide the export button and legend
+      // Temporarily hide only the export button (keep legend visible)
       const exportBtn = document.querySelector('.export-btn')
-      const legend = document.querySelector('.map-legend')
       const originalExportDisplay = exportBtn ? exportBtn.style.display : ''
-      const originalLegendDisplay = legend ? legend.style.display : ''
       
       if (exportBtn) exportBtn.style.display = 'none'
-      if (legend) legend.style.display = 'none'
 
       // Wait a bit for any animations to complete
       await new Promise(resolve => setTimeout(resolve, 500))
 
-      // Capture just the map (without legend) first
+      // Capture the entire map including the legend
       const mapCanvas = await html2canvas(mapContainer, {
         useCORS: true,
         allowTaint: true,
@@ -455,38 +474,16 @@ function App() {
         height: mapContainer.offsetHeight,
         backgroundColor: '#0f172a',
         logging: false,
+        imageTimeout: 10000,
         ignoreElements: (element) => {
           return element.classList.contains('export-btn') || 
-                 element.classList.contains('map-legend') ||
                  element.classList.contains('export-spinner') ||
                  element.classList.contains('export-icon')
         }
       })
 
-      // Restore the legend temporarily to capture it separately
-      if (legend) legend.style.display = originalLegendDisplay
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Capture the legend separately
-      let legendCanvas = null
-      if (legend) {
-        legendCanvas = await html2canvas(legend, {
-          useCORS: true,
-          allowTaint: true,
-          scale: 2,
-          backgroundColor: null,
-          logging: false,
-          ignoreElements: (element) => {
-            return element.classList.contains('export-btn') || 
-                   element.classList.contains('export-spinner') ||
-                   element.classList.contains('export-icon')
-          }
-        })
-      }
-
-      // Restore original displays
+      // Restore the export button
       if (exportBtn) exportBtn.style.display = originalExportDisplay
-      if (legend) legend.style.display = originalLegendDisplay
 
       // Create final canvas
       const finalCanvas = document.createElement('canvas')
@@ -555,37 +552,9 @@ function App() {
           })
       }
 
-      // Draw the legend on top
-      if (legendCanvas) {
-        const legendRect = legend.getBoundingClientRect()
-        const mapRect = mapContainer.getBoundingClientRect()
-        
-        // Calculate legend position relative to map container
-        const legendX = (legendRect.left - mapRect.left) * 2
-        const legendY = (legendRect.top - mapRect.top) * 2
-        
-        finalCtx.drawImage(legendCanvas, legendX, legendY)
-      }
+      // Legend is already included in the main map capture
 
-      // Add watermark
-      const watermarkText1 = 'github.com/AminAlam/WarHeadliner'
-      const watermarkText2 = 'war.aminalam.info'
-      
-      const watermarkWidth = 500
-      const watermarkHeight = 80
-      finalCtx.fillStyle = 'rgba(255, 255, 255, 0.9)'
-      finalCtx.fillRect(10, finalCanvas.height - watermarkHeight - 10, watermarkWidth, watermarkHeight)
-      
-      finalCtx.strokeStyle = 'rgba(30, 41, 59, 0.3)'
-      finalCtx.lineWidth = 2
-      finalCtx.strokeRect(10, finalCanvas.height - watermarkHeight - 10, watermarkWidth, watermarkHeight)
-      
-      finalCtx.fillStyle = '#1e293b'
-      finalCtx.font = 'bold 24px Arial'
-      finalCtx.fillText(watermarkText1, 25, finalCanvas.height - 50)
-      finalCtx.font = 'bold 20px Arial'
-      finalCtx.fillText(watermarkText2, 25, finalCanvas.height - 25)
-
+      // Add timestamp only (watermark is already captured from the map)
       const timestamp = new Date().toLocaleString()
       finalCtx.font = '14px Arial'
       finalCtx.fillStyle = 'rgba(30, 41, 59, 0.7)'
@@ -599,9 +568,19 @@ function App() {
 
       console.log(t('mapExported'))
       
+      // Restore original banner text after export
+      if (bannerElement && originalBannerText) {
+        bannerElement.textContent = originalBannerText
+      }
+      
     } catch (error) {
       console.error('Error exporting map:', error)
       alert('Failed to export map. Please try again.')
+      
+      // Restore original banner text even if export fails
+      if (bannerElement && originalBannerText) {
+        bannerElement.textContent = originalBannerText
+      }
     } finally {
       setIsExporting(false)
     }
@@ -646,13 +625,14 @@ function App() {
             <span className="nav-icon">📊</span>
             {t('statistics')}
           </button>
-          <button 
+          {/* Messages section disabled */}
+          {/* <button 
             className={`nav-item ${activePanel === 'messages' ? 'active' : ''}`}
             onClick={() => handlePanelChange('messages')}
           >
             <span className="nav-icon">📱</span>
             {t('messages')}
-          </button>
+          </button> */}
           <button 
             className={`nav-item ${activePanel === 'filters' ? 'active' : ''}`}
             onClick={() => handlePanelChange('filters')}
@@ -696,57 +676,7 @@ function App() {
              </div>
            )}
 
-                                {activePanel === 'messages' && (
-             <div className="messages-panel">
-               <h3>{t('recentMessages')}</h3>
-               <div className="messages-list">
-                 {messages.map((message) => (
-                   <div key={message.id} className="message-card">
-                     <div className="message-header">
-                       <span className={`message-type ${getEventType(message).toLowerCase().replace(/\s+/g, '-')}`}>
-                         {getEventType(message)}
-                       </span>
-                       <span className="message-time">
-                         {format(new Date(message.message_timestamp), 'HH:mm')}
-                       </span>
-                     </div>
-                     <div className="message-content">
-                       <div className="message-channel">{message.channel_name}</div>
-                       {message.official_location && (
-                         <div className="message-location">📍 {message.official_location}</div>
-                       )}
-                       <div className="message-text">{message.message_text}</div>
-                     </div>
-                   </div>
-                 ))}
-               </div>
-               
-               {/* Load More Button */}
-               <div className="load-more-container">
-                 {messagesLoading && (
-                   <div className="loading-messages">
-                     <div className="loading-spinner-small"></div>
-                     <span>{t('loadingMessages')}</span>
-                   </div>
-                 )}
-                 
-                 {!messagesLoading && hasMoreMessages && (
-                   <button 
-                     className="load-more-btn"
-                     onClick={loadMoreMessages}
-                   >
-                     {t('loadMore')}
-                   </button>
-                 )}
-                 
-                 {!messagesLoading && !hasMoreMessages && messages.length > 0 && (
-                   <div className="no-more-messages">
-                     {t('noMoreMessages')}
-                   </div>
-                 )}
-               </div>
-             </div>
-           )}
+           {/* Messages panel has been disabled */}
 
                      {activePanel === 'filters' && (
              <div className="filters-panel">
@@ -868,8 +798,8 @@ function App() {
 
           {/* Watermark - Bottom Left */}
           <div className="map-watermark">
-            <div className="watermark-line1">github.com/AminAlam/WarHeadliner</div>
-            <div className="watermark-line2">war.aminalam.info</div>
+            <div className="watermark-line1">Github.com/AminAlam/WarHeadliner</div>
+            <div className="watermark-line2">war.AminAlam.info</div>
           </div>
 
           <MapContainer 
