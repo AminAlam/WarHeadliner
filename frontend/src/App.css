@@ -2094,3 +2094,22 @@ body {
 .load-more-btn:active {
   transform: translateY(0);
 }
+
+/* Marker Cluster Customization */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+  border: 2px solid #667eea !important;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: rgba(15, 23, 42, 0.8) !important;
+  color: #e2e8f0 !important;
+  border-radius: 50%;
+  font-weight: bold;
+}
