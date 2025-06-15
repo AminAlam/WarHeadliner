@@ -116,15 +116,24 @@ const IncidentCard = React.memo(({
         return Promise.resolve({ ...media, include: true })
       }
 
-      // Check image dimensions
+      // Check image dimensions - More mobile-friendly filtering
       return new Promise((resolve) => {
         const img = new Image()
         img.onload = () => {
+          // More flexible filtering: include images that are at least 200px wide OR 150px tall
+          // This prevents tiny thumbnails/icons while allowing mobile-sized images
+          const isValidSize = img.width >= 200 || img.height >= 150
+          
+          // Check aspect ratio - filter out very thin or very wide images
+          const aspectRatio = Math.min(img.width / img.height, img.height / img.width)
+          const hasGoodRatio = aspectRatio >= 0.3
+          
           resolve({ 
             ...media, 
-            include: img.width > 500,
+            include: isValidSize && hasGoodRatio,
             width: img.width,
-            height: img.height
+            height: img.height,
+            aspectRatio: aspectRatio
           })
         }
         img.onerror = () => {
@@ -377,7 +386,12 @@ const EnhancedMarker = React.memo(({ event, style }) => {
                : `<img src="/api/media/${fileId}" alt="Media" class="popup-media-img" 
                        onclick="window.open('/api/media/${fileId}', '_blank')"
                        onerror="this.style.display='none'"
-                       onload="if(this.naturalWidth <= 500) this.style.display='none'">`
+                       onload="
+                         const aspectRatio = Math.min(this.naturalWidth / this.naturalHeight, this.naturalHeight / this.naturalWidth);
+                         if ((this.naturalWidth < 200 && this.naturalHeight < 150) || aspectRatio < 0.3) {
+                           this.style.display='none';
+                         }
+                       ">`
            }).join('')}
          </div>`
       : ''
