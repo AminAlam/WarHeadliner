@@ -1437,10 +1437,48 @@ function App() {
                     <video 
                       src={galleryModal.images[galleryModal.currentIndex]?.url}
                       controls
-                      autoPlay
+                      preload="metadata"
+                      muted
                       className="gallery-video"
                       onError={(e) => {
-                        console.error('Video load error:', e)
+                        console.error('Gallery video load error:', e)
+                        console.error('Failed URL:', galleryModal.images[galleryModal.currentIndex]?.url)
+                        // Show error message
+                        e.target.style.display = 'none'
+                        const errorDiv = document.createElement('div')
+                        errorDiv.innerHTML = `
+                          <div style="
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            padding: 2rem;
+                            background: rgba(239, 68, 68, 0.1);
+                            border: 2px solid rgba(239, 68, 68, 0.3);
+                            border-radius: 0.5rem;
+                            color: #ef4444;
+                            font-size: 0.9rem;
+                            text-align: center;
+                            min-height: 200px;
+                          ">
+                            <div style="font-size: 2rem; margin-bottom: 1rem;">📹</div>
+                            <div>Video failed to load</div>
+                            <div style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
+                              Click to open in new tab
+                            </div>
+                          </div>
+                        `
+                        errorDiv.style.cursor = 'pointer'
+                        errorDiv.onclick = () => {
+                          window.open(galleryModal.images[galleryModal.currentIndex]?.url, '_blank')
+                        }
+                        e.target.parentElement.appendChild(errorDiv)
+                      }}
+                      onLoadStart={() => {
+                        console.log('Gallery video loading started:', galleryModal.images[galleryModal.currentIndex]?.url)
+                      }}
+                      onCanPlay={() => {
+                        console.log('Gallery video can play:', galleryModal.images[galleryModal.currentIndex]?.url)
                       }}
                     />
                   ) : (
