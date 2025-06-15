@@ -613,11 +613,12 @@ function App() {
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
   const popupMedia = useRef({})
 
-  // Mobile performance detection
   const isMobile = useMemo(() => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
            window.innerWidth <= 768
   }, [])
+  
+  const [legendOpen, setLegendOpen] = useState(!isMobile)
   
   // Performance flags for mobile
   const performanceMode = useMemo(() => ({
@@ -635,6 +636,17 @@ function App() {
   useEffect(() => {
     document.title = t('appTitle')
   }, [language])
+
+  const timeFilterOptions = useMemo(() => ({
+    1: t('lastHour'),
+    6: t('last6Hours'),
+    12: t('last12Hours'),
+    24: t('last24Hours'),
+    48: t('last48Hours'),
+    'all': t('allTime')
+  }), [t]);
+
+  const currentTimeFilterLabel = timeFilterOptions[timeFilter];
 
   useEffect(() => {
     // Expose a function to window for the popup onclick handlers
@@ -1331,58 +1343,69 @@ function App() {
                 {/* Map Container */}
         <div className="map-container">
           {/* Legend */}
-          <div className="map-legend">
-            <div className="legend-header">
-              <h4>{t('legend')}</h4>
-              <button 
-                className="export-btn"
-                onClick={exportMapImage}
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <>
-                    <div className="export-spinner"></div>
-                    {t('exportingMap')}
-                  </>
-                ) : (
-                  <>
-                    <span className="export-icon">📸</span>
-                    {t('exportMap')}
-                  </>
-                )}
-              </button>
+          <div className={`map-legend ${!legendOpen ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
+            <div className="legend-header" onClick={() => isMobile && setLegendOpen(!legendOpen)}>
+              <div className="legend-title-group">
+                <h4>{t('legend')}</h4>
+                {!legendOpen && isMobile && <span className="legend-timespan-collapsed">({currentTimeFilterLabel})</span>}
+              </div>
+              {isMobile && <span className="legend-toggle-icon">{legendOpen ? '▼' : '▲'}</span>}
             </div>
-            <div className="legend-items">
-              {Object.entries(visibleIncidents).map(([type, visible]) => {
-                // Get style directly from incidentStyles instead of creating a sample event
-                const style = incidentStyles[type] || incidentStyles.other
-                return (
-                  <div key={type} className="legend-item">
-                    <label className="legend-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={visible}
-                        onChange={() => toggleIncidentType(type)}
-                      />
-                      <div 
-                        className="legend-color" 
-                        style={{ 
-                          backgroundColor: style.fillColor,
-                          border: `2px solid ${style.color}`,
-                          opacity: visible ? 1 : 0.3
-                        }}
-                      ></div>
-                      <span className={`legend-label ${!visible ? 'disabled' : ''}`}>
-                        {t(type === 'air_attack' ? 'airAttacks' : 
-                          type === 'air_defence' ? 'airDefence' : 
-                          type === 'electricity_shortage' ? 'electricityIssues' : 
-                          type === 'water_shortage' ? 'waterIssues' : 
-                          type === 'unknown_explosion' ? 'unknownExplosions' : 'other')}
-                      </span>
-                    </label>
-                  </div>
-                )
-              })}
+
+            <div className="legend-content">
+              <div className="legend-timespan">
+                <span>{t('timeRange')}: <strong>{currentTimeFilterLabel}</strong></span>
+              </div>
+              <div className="legend-items">
+                {Object.entries(visibleIncidents).map(([type, visible]) => {
+                  const style = incidentStyles[type] || incidentStyles.other;
+                  return (
+                    <div key={type} className="legend-item">
+                      <label className="legend-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={visible}
+                          onChange={() => toggleIncidentType(type)}
+                        />
+                        <div 
+                          className="legend-color" 
+                          style={{ 
+                            backgroundColor: style.fillColor,
+                            border: `2px solid ${style.color}`,
+                            opacity: visible ? 1 : 0.3
+                          }}
+                        ></div>
+                        <span className={`legend-label ${!visible ? 'disabled' : ''}`}>
+                          {t(type === 'air_attack' ? 'airAttacks' : 
+                            type === 'air_defence' ? 'airDefence' : 
+                            type === 'electricity_shortage' ? 'electricityIssues' : 
+                            type === 'water_shortage' ? 'waterIssues' : 
+                            type === 'unknown_explosion' ? 'unknownExplosions' : 'other')}
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="legend-footer">
+                <button 
+                  className="export-btn"
+                  onClick={exportMapImage}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <>
+                      <div className="export-spinner"></div>
+                      {t('exportingMap')}
+                    </>
+                  ) : (
+                    <>
+                      <span className="export-icon">📸</span>
+                      {t('exportMap')}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
