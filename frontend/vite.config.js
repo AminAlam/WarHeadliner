@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    allowedHosts: ['war.aminalam.info'],
     proxy: {
       '/api': {
         target: 'https://warapi.aminalam.info',
@@ -13,7 +14,7 @@ export default defineConfig({
         secure: true
       },
       '/socket.io': {
-        target: 'wss://warapi.aminalam.info',
+        target: 'https://warapi.aminalam.info',
         ws: true,
         changeOrigin: true,
         secure: true

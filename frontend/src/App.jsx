@@ -10,6 +10,8 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import html2canvas from 'html2canvas'
 import io from 'socket.io-client'
 
+const socket = io({ path: '/socket.io' });
+
 // Fix for default markers in react-leaflet
 L.Marker.prototype.options.icon = L.divIcon({
   html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>',
@@ -187,10 +189,12 @@ const IncidentCard = React.memo(({
                       <video 
                         src={media.url} 
                         muted
+                        playsInline
                         preload="metadata"
                         onError={(e) => {
                           // More graceful error handling - show placeholder instead of hiding
-                          console.warn('Video failed to load:', media.url)
+                          const error = e.target.error || {};
+                          console.warn('Video failed to load:', media.url, `code: ${error.code}`, `message: ${error.message}`)
                           e.target.style.display = 'none'
                           // Show error placeholder
                           const placeholder = document.createElement('div')
@@ -593,7 +597,6 @@ function App() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
-  const [socket, setSocket] = useState(null);
 
   // Mobile performance detection
   const isMobile = useMemo(() => {
@@ -931,40 +934,6 @@ function App() {
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [galleryModal.isOpen])
-
-  // Initialize socket connection
-  useEffect(() => {
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? 'wss://warapi.aminalam.info'
-      : 'ws://localhost:3001';
-
-    const newSocket = io(socketUrl, {
-      withCredentials: true,
-      transports: ['websocket']
-    });
-
-    newSocket.on('connect', () => {
-      console.log('Connected to WebSocket server');
-      // Subscribe to updates with current filters
-      newSocket.emit('subscribe', { hours: timeFilter, types: typeFilter });
-    });
-
-    newSocket.on('initialData', (data) => {
-      setEvents(data);
-    });
-
-    newSocket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
-    };
-  }, []);
 
   // Update subscription when filters change
   useEffect(() => {
@@ -1476,48 +1445,20 @@ function App() {
                     <video 
                       src={galleryModal.images[galleryModal.currentIndex]?.url}
                       controls
-                      preload="metadata"
+                      autoPlay
                       muted
+                      playsInline
                       className="gallery-video"
                       onError={(e) => {
-                        console.error('Gallery video load error:', e)
-                        console.error('Failed URL:', galleryModal.images[galleryModal.currentIndex]?.url)
-                        // Show error message
-                        e.target.style.display = 'none'
-                        const errorDiv = document.createElement('div')
-                        errorDiv.innerHTML = `
-                          <div style="
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            justify-content: center;
-                            padding: 2rem;
-                            background: rgba(239, 68, 68, 0.1);
-                            border: 2px solid rgba(239, 68, 68, 0.3);
-                            border-radius: 0.5rem;
-                            color: #ef4444;
-                            font-size: 0.9rem;
-                            text-align: center;
-                            min-height: 200px;
-                          ">
-                            <div style="font-size: 2rem; margin-bottom: 1rem;">📹</div>
-                            <div>Video failed to load</div>
-                            <div style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
-                              Click to open in new tab
-                            </div>
-                          </div>
-                        `
-                        errorDiv.style.cursor = 'pointer'
-                        errorDiv.onclick = () => {
-                          window.open(galleryModal.images[galleryModal.currentIndex]?.url, '_blank')
+                        const error = e.target.error || {};
+                        console.error('ERRORGallery video load error:', `code: ${error.code}`, `message: ${error.message}`)
+                        console.error('ERRORFailed URL:', galleryModal.images[galleryModal.currentIndex]?.url)
+                      }}
+                      onLoadedMetadata={(e) => {
+                        if (e.target.videoHeight === 0) {
+                          console.error('Gallery video metadata error:', e)
+                          e.target.style.display = 'none'
                         }
-                        e.target.parentElement.appendChild(errorDiv)
-                      }}
-                      onLoadStart={() => {
-                        console.log('Gallery video loading started:', galleryModal.images[galleryModal.currentIndex]?.url)
-                      }}
-                      onCanPlay={() => {
-                        console.log('Gallery video can play:', galleryModal.images[galleryModal.currentIndex]?.url)
                       }}
                     />
                   ) : (
