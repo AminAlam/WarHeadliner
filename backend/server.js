@@ -4,9 +4,20 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const axios = require('axios');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: ["https://war.aminalam.info", "http://localhost:3000"],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
 const port = process.env.PORT || 3001;
 
 // Database connection helper - creates connection only when needed
@@ -243,7 +254,66 @@ app.get('/api/media/:fileId', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected');
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+
+  // Handle real-time updates
+  socket.on('subscribe', async (filters) => {
+    try {
+      // Query based on filters
+      const whereClause = buildWhereClause(filters);
+      const query = `
+        SELECT * FROM messages 
+        ${whereClause}
+        ORDER BY message_timestamp DESC
+        LIMIT 1000
+      `;
+      const result = await executeQuery(query);
+      socket.emit('initialData', result.rows);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      socket.emit('error', { message: 'Error fetching data' });
+    }
+  });
+});
+
+// Helper function to build WHERE clause
+function buildWhereClause(filters) {
+  const { hours, types } = filters;
+  let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL`;
+  
+  if (hours && hours !== 'all') {
+    whereClause += ` AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
+  }
+  
+  if (types && types.length > 0) {
+    const typeFilters = types.map(type => {
+      switch(type) {
+        case 'air_attack': return 'is_air_attack = true';
+        case 'air_defence': return 'is_air_defence = true';
+        case 'electricity_shortage': return 'is_electricity_shortage = true';
+        case 'water_shortage': return 'is_water_shortage = true';
+        case 'unknown_explosion': return 'is_unknown_explosion = true';
+        default: return null;
+      }
+    }).filter(Boolean);
+    
+    if (typeFilters.length > 0) {
+      whereClause += ` AND (${typeFilters.join(' OR ')})`;
+    }
+  }
+  
+  return whereClause;
+}
+
+// Use httpServer instead of app.listen
+httpServer.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  console.log('WebSocket server is ready');
   console.log('Database connections will be created on-demand for each request');
 });

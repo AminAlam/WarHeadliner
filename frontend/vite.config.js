@@ -8,9 +8,32 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
+        target: 'https://warapi.aminalam.info',
+        changeOrigin: true,
+        secure: true
+      },
+      '/socket.io': {
+        target: 'wss://warapi.aminalam.info',
+        ws: true,
+        changeOrigin: true,
+        secure: true
       }
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
+  },
+  // WebSocket configuration
+  websocket: {
+    hmr: {
+      protocol: 'wss',
+      host: 'war.aminalam.info',
+      clientPort: 443,
+      path: ''
     }
   }
 }) 

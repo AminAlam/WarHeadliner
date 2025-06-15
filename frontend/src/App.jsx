@@ -4,19 +4,18 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaf
 import { format } from 'date-fns'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
-
-// Fix for default markers in react-leaflet
 import L from 'leaflet'
 import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
+import html2canvas from 'html2canvas'
+import io from 'socket.io-client'
 
-let DefaultIcon = L.divIcon({
+// Fix for default markers in react-leaflet
+L.Marker.prototype.options.icon = L.divIcon({
   html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>',
   iconSize: [20, 20],
   iconAnchor: [10, 10]
 })
-
-L.Marker.prototype.options.icon = DefaultIcon
 
 // Component to store map reference and track bounds
 function MapRef({ onBoundsChange }) {
@@ -594,6 +593,7 @@ function App() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
+  const [socket, setSocket] = useState(null);
 
   // Mobile performance detection
   const isMobile = useMemo(() => {
@@ -932,7 +932,46 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [galleryModal.isOpen])
 
+  // Initialize socket connection
+  useEffect(() => {
+    const socketUrl = process.env.NODE_ENV === 'production' 
+      ? 'wss://warapi.aminalam.info'
+      : 'ws://localhost:3001';
 
+    const newSocket = io(socketUrl, {
+      withCredentials: true,
+      transports: ['websocket']
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Connected to WebSocket server');
+      // Subscribe to updates with current filters
+      newSocket.emit('subscribe', { hours: timeFilter, types: typeFilter });
+    });
+
+    newSocket.on('initialData', (data) => {
+      setEvents(data);
+    });
+
+    newSocket.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      if (newSocket) {
+        newSocket.disconnect();
+      }
+    };
+  }, []);
+
+  // Update subscription when filters change
+  useEffect(() => {
+    if (socket) {
+      socket.emit('subscribe', { hours: timeFilter, types: typeFilter });
+    }
+  }, [timeFilter, typeFilter, socket]);
 
   const exportMapImage = async () => {
     setIsExporting(true)
