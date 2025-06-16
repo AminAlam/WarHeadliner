@@ -385,8 +385,8 @@ body {
 
 .gallery-close {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: -1rem;
+  right: -1rem;
   background: rgba(239, 68, 68, 0.8);
   color: white;
   border: none;
@@ -480,8 +480,8 @@ body {
   }
   
   .gallery-close {
-    top: 0.5rem;
-    right: 0.5rem;
+    top: -1rem;
+    right: -1rem;
     width: 35px;
     height: 35px;
     font-size: 1.2rem;

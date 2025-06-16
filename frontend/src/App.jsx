@@ -294,6 +294,51 @@ const IncidentCard = React.memo(({
   )
 })
 
+
+const getJitteredCoords = (() => {
+  const coordsMap = new Map();
+  
+  return (lat, lng, id) => {
+    // Ensure lat and lng are numbers
+    const numLat = parseFloat(lat);
+    const numLng = parseFloat(lng);
+    
+    if (isNaN(numLat) || isNaN(numLng)) {
+      console.warn('Invalid coordinates:', lat, lng);
+      return [lat, lng]; // Return original values if parsing fails
+    }
+    
+    const key = `${numLat},${numLng}`;
+    if (!coordsMap.has(key)) {
+      coordsMap.set(key, []);
+    }
+    
+    const existingPoints = coordsMap.get(key);
+    let index = existingPoints.findIndex(p => p.id === id);
+    
+    if (index === -1) {
+      index = existingPoints.length;
+      existingPoints.push({ id });
+    }
+    
+    if (index === 0) {
+      return [numLat, numLng]; // First point stays at original location
+    }
+    
+    // Add random offset within a radius based on index
+    const radius = 0.0007 * Math.ceil(index / 4); // Increase radius for each group of 4 points
+    const randomAngle = Math.random() * Math.PI * 2; // Random angle between 0 and 2π
+    const offsetLat = radius * Math.cos(randomAngle);
+    const offsetLng = radius * Math.sin(randomAngle);
+    
+    // Calculate new coordinates and ensure they're within valid ranges
+    const newLat = Math.min(Math.max(numLat + offsetLat, -90), 90);
+    const newLng = Math.min(Math.max(numLng + offsetLng, -180), 180);
+    
+    return [newLat, newLng];
+  };
+})();
+
 // Enhanced Marker component with realistic fade effects
 const EnhancedMarker = React.memo(({ event, style, popupMedia, markerRefs }) => {
   const map = useMap()
@@ -304,6 +349,12 @@ const EnhancedMarker = React.memo(({ event, style, popupMedia, markerRefs }) => 
   const eventId = event.id
   const eventLat = event.latitude
   const eventLng = event.longitude
+
+  const [displayLat, displayLng] = useMemo(() => 
+    getJitteredCoords(eventLat, eventLng, eventId),
+    [eventLat, eventLng, eventId]
+  )
+
   
   useEffect(() => {
     // Create unique gradient ID for this marker
@@ -437,7 +488,7 @@ const EnhancedMarker = React.memo(({ event, style, popupMedia, markerRefs }) => 
       : ''
 
     // Create marker only once
-    const newMarker = L.marker([eventLat, eventLng], { icon: customIcon })
+    const newMarker = L.marker([displayLat, displayLng], { icon: customIcon })
       .bindPopup(`
         <div class="popup-content">
           ${mediaHtml}

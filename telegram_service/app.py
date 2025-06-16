@@ -19,6 +19,7 @@ SESSION = os.getenv('TELEGRAM_SESSION_NAME', 'telegram_session')
 # New configuration for forwarding
 TARGET_CHANNEL = os.getenv('TARGET_CHANNEL')  # Channel username or ID where messages will be forwarded
 KEYWORDS = 'حمله هوایی,موشک,پهپاد,جنگنده,بمب افکن,پدافند هوایی,دفاع هوایی,رهگیری,قطع برق,خاموشی,قطع آب,کمبود آب,انفجار,صدای انفجار,آتش سوزی,حادثه,موشک,پدافند,بمب,راکت,صدا,منفجر,دیده شد,حمله,لرزید'  # Comma-separated keywords to trigger forwarding
+TEST_LENGTH_LIMIT = 400
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -55,7 +56,7 @@ def should_forward_message(message_text):
     print(f"Checking message: {message_text}")
     print(f"Keywords: {KEYWORDS}")
     print(f"Keywords split: {KEYWORDS.split(',')}")
-    return any(keyword.strip() in message_text for keyword in KEYWORDS.split(','))
+    return any(keyword.strip() in message_text for keyword in KEYWORDS.split(',') if len(keyword.strip()) < TEST_LENGTH_LIMIT)
 
 async def forward_message(client, message, target_channel):
     """Forward a message to the target channel"""
