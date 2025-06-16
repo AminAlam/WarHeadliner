@@ -295,7 +295,7 @@ const IncidentCard = React.memo(({
 })
 
 // Enhanced Marker component with realistic fade effects
-const EnhancedMarker = React.memo(({ event, style, popupMedia }) => {
+const EnhancedMarker = React.memo(({ event, style, popupMedia, markerRefs }) => {
   const map = useMap()
   const [markerId] = useState(() => `marker-${event.id}`)
   const [marker, setMarker] = useState(null)
@@ -450,19 +450,21 @@ const EnhancedMarker = React.memo(({ event, style, popupMedia }) => {
           <div class="popup-body">
             <div><strong>Location:</strong> ${event.official_location || event.extracted_location}</div>
             <div><strong>Channel:</strong> ${event.channel_name}</div>
-            <div><strong>Message:</strong> ${event.message_text.substring(0, 150)}...</div>
+            <div class="popup-message"><strong>Message:</strong> <div class="popup-scrollable-content">${event.message_text}</div></div>
           </div>
         </div>
       `)
     
     newMarker.addTo(map)
     setMarker(newMarker)
+    markerRefs.current[event.id] = newMarker;
     
     // Cleanup function
     return () => {
       if (newMarker) {
         map.removeLayer(newMarker)
       }
+      delete markerRefs.current[event.id];
       const gradientElement = document.getElementById(gradientId)
       if (gradientElement) {
         gradientElement.remove()
@@ -612,6 +614,7 @@ function App() {
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
   const popupMedia = useRef({})
+  const markerRefs = useRef({});
   const [viewerCount, setViewerCount] = useState(0);
 
   const isMobile = useMemo(() => {
@@ -671,19 +674,17 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const params = {}
-      if (timeFilter !== 'all') {
-        params.hours = timeFilter
-      }
-      if (typeFilter) params.types = typeFilter
+      const params = {
+        hours: timeFilter
+      };
+      if (typeFilter) params.types = typeFilter;
       if (channelFilter.length > 0) {
-        params.channels = channelFilter.map(c => c.value).join(',')
+        params.channels = channelFilter.map(c => c.value).join(',');
       }
 
-      const statsParams = {}
-      if (timeFilter !== 'all') {
-        statsParams.hours = timeFilter
-      }
+      const statsParams = {
+        hours: timeFilter
+      };
 
       const [eventsRes, statsRes, messagesRes, channelsRes] = await Promise.all([
         axios.get('/api/events', { params }),
@@ -919,11 +920,21 @@ function App() {
 
   // Handle incident selection from bottom bar
   const handleIncidentSelect = (incident) => {
-    setSelectedIncident(incident)
-    if (window.leafletMapInstance) {
-      window.leafletMapInstance.setView([incident.latitude, incident.longitude], 12)
+    setSelectedIncident(incident);
+    if (window.leafletMapInstance && incident.latitude && incident.longitude) {
+      const map = window.leafletMapInstance;
+      const marker = markerRefs.current[incident.id];
+
+      map.setView([incident.latitude, incident.longitude], 12);
+
+      if (marker) {
+        // Defer opening the popup until the map has finished panning
+        map.once('moveend', () => {
+          marker.openPopup();
+        });
+      }
     }
-  }
+  };
 
   // Handle load more incidents in bottom menu
   const handleLoadMoreIncidents = () => {
@@ -985,7 +996,14 @@ function App() {
   // Update subscription when filters change
   useEffect(() => {
     if (socket) {
-      socket.emit('subscribe', { hours: timeFilter, types: typeFilter, channels: channelFilter.map(c => c.value) });
+      // Prepare filters in the same format as the REST API
+      const filters = {
+        hours: timeFilter === 'all' ? undefined : timeFilter,
+        types: typeFilter,
+        channels: channelFilter.map(c => c.value)
+      };
+      
+      socket.emit('subscribe', filters);
 
       socket.on('viewer_count_update', (count) => {
         setViewerCount(count);
@@ -1354,12 +1372,12 @@ function App() {
         <div className="map-container">
           {/* Legend */}
           <div className={`map-legend ${!legendOpen ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
-            <div className="legend-header" onClick={() => isMobile && setLegendOpen(!legendOpen)}>
+            <div className="legend-header" onClick={() => setLegendOpen(!legendOpen)}>
               <div className="legend-title-group">
                 <h4>{t('legend')}</h4>
-                {!legendOpen && isMobile && <span className="legend-timespan-collapsed">({currentTimeFilterLabel})</span>}
+                {!legendOpen && <span className="legend-timespan-collapsed">({currentTimeFilterLabel})</span>}
               </div>
-              {isMobile && <span className="legend-toggle-icon">{legendOpen ? '▼' : '▲'}</span>}
+              <span className="legend-toggle-icon">{legendOpen ? '▼' : '▲'}</span>
             </div>
 
             <div className="legend-content">
@@ -1461,7 +1479,7 @@ function App() {
               .map((event) => {
                 const style = getIncidentStyle(event)
                 return (
-                  <EnhancedMarker key={event.id} event={event} style={style} popupMedia={popupMedia} />
+                  <EnhancedMarker key={event.id} event={event} style={style} popupMedia={popupMedia} markerRefs={markerRefs} />
                 )
               })}
           </MapContainer>

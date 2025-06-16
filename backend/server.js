@@ -20,8 +20,6 @@ const io = new Server(httpServer, {
 
 const port = process.env.PORT || 3001;
 
-let viewerCount = 0;
-
 // Database connection helper - creates connection only when needed
 async function createDatabaseConnection() {
   const client = new Client({
@@ -79,8 +77,12 @@ app.get('/api/events', async (req, res) => {
   try {
     const { hours = 24, types, channels } = req.query;
     
-    let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL 
-                      AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
+    let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL`;
+    
+    // Apply time filter unless explicitly set to 'all'
+    if (hours !== 'all') {
+      whereClause += ` AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
+    }
     
     if (types) {
       const typeFilters = types.split(',').map(type => {
@@ -156,8 +158,17 @@ app.get('/api/channels', async (req, res) => {
 // Get statistics
 app.get('/api/stats', async (req, res) => {
   try {
-    const { hours = 24 } = req.query;
-    
+    const { hours } = req.query; // No default value
+
+    let timeFilterQuery = '';
+    // If hours is provided and not 'all', apply the time filter
+    if (hours && hours !== 'all') {
+      const parsedHours = parseInt(hours, 10);
+      if (!isNaN(parsedHours)) {
+        timeFilterQuery = `WHERE message_timestamp > NOW() - INTERVAL '${parsedHours} hours'`;
+      }
+    }
+
     const query = `
       SELECT 
         COUNT(*) as total_messages,
@@ -168,7 +179,7 @@ app.get('/api/stats', async (req, res) => {
         COUNT(CASE WHEN is_unknown_explosion THEN 1 END) as unknown_explosions,
         COUNT(CASE WHEN latitude IS NOT NULL THEN 1 END) as messages_with_location
       FROM messages 
-      WHERE message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'
+      ${timeFilterQuery}
     `;
 
     const result = await executeQuery(query);
@@ -282,19 +293,14 @@ app.get('/api/media/:fileId', async (req, res) => {
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  viewerCount++;
-  console.log('a user connected. Viewer count:', viewerCount);
-  io.emit('viewer_count_update', viewerCount);
+  console.log('Client connected');
 
   socket.on('disconnect', () => {
-    viewerCount--;
-    console.log('user disconnected. Viewer count:', viewerCount);
-    io.emit('viewer_count_update', viewerCount);
+    console.log('Client disconnected');
   });
 
   // Handle real-time updates
   socket.on('subscribe', async (filters) => {
-    console.log('Client subscribed to filters:', filters);
     try {
       // Query based on filters
       const whereClause = buildWhereClause(filters);
@@ -318,8 +324,11 @@ function buildWhereClause(filters) {
   const { hours, types } = filters;
   let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL`;
   
-  if (hours && hours !== 'all') {
-    whereClause += ` AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
+  // Handle time filtering consistently with the REST API
+  // If hours is undefined, null, or not 'all', apply the time filter
+  if (hours !== 'all') {
+    const hoursToFilter = hours || 24; // Default to 24 hours if not specified
+    whereClause += ` AND message_timestamp > NOW() - INTERVAL '${parseInt(hoursToFilter)} hours'`;
   }
   
   if (types && types.length > 0) {

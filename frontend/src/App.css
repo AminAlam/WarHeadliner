@@ -837,29 +837,29 @@ body {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  width: 280px;
   background: rgba(30, 41, 59, 0.8);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 1px solid #475569;
   border-radius: 0.75rem;
-  z-index: 900;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
-  width: 280px;
-  display: flex;
-  flex-direction: column;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease-in-out;
+  overflow: hidden;
 }
 
 .legend-header {
+  padding: 0.75rem 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  cursor: default;
+  border-bottom: 1px solid #475569;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
 }
 
-.map-legend.mobile .legend-header {
-  cursor: pointer;
+.map-legend.collapsed .legend-header {
+  border-bottom-color: transparent;
 }
 
 .legend-title-group {
@@ -870,14 +870,14 @@ body {
 
 .legend-timespan-collapsed {
   font-size: 0.8rem;
-  font-weight: 400;
   color: #94a3b8;
+  font-weight: 400;
 }
 
 .legend-toggle-icon {
-  font-size: 1rem;
-  color: #94a3b8;
+  font-size: 0.8rem;
   transition: transform 0.3s ease;
+  color: #94a3b8;
 }
 
 .map-legend.collapsed .legend-toggle-icon {
@@ -885,30 +885,28 @@ body {
 }
 
 .legend-content {
-  padding: 0 1rem 1rem 1rem;
-  overflow: hidden;
-  max-height: 500px; /* Adjust as needed */
-  transition: max-height 0.4s ease-in-out, padding 0.3s ease, opacity 0.3s ease;
+  padding: 1rem;
+  transition: padding 0.3s ease, max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px; /* Adjust as needed for content */
   opacity: 1;
+  overflow: hidden;
 }
 
 .map-legend.collapsed {
-  padding-top: 0;
-  padding-bottom: 0;
+  /* No special styles needed here now */
 }
 
 .map-legend.collapsed .legend-content {
   max-height: 0;
-  padding: 0 1rem;
   opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .legend-timespan {
-  padding-bottom: 0.75rem;
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid #334155;
-  font-size: 0.85rem;
-  color: #cbd5e1;
+  font-size: 0.9rem;
+  color: #e2e8f0;
 }
 
 .legend-timespan strong {
@@ -1068,16 +1066,32 @@ body {
 }
 
 .popup-body div {
-  margin-bottom: 0.5rem;
+  margin-bottom: 4px;
 }
 
 .popup-body strong {
-  color: #94a3b8;
+  color: #cbd5e1;
+  margin-right: 5px;
+}
+
+.popup-message {
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-scrollable-content {
+  max-height: 100px; /* Adjust as needed */
+  overflow-y: auto;
+  padding-right: 5px; /* For scrollbar */
+  margin-top: 4px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .popup-media {
   display: flex;
-  gap: 0.5rem;
+  gap: 5px;
   margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
