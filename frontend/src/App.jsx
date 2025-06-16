@@ -754,14 +754,14 @@ function App() {
         pulseAnimation: false
       },
       unknown_explosion: {
-        color: '#6b7280',
-        fillColor: '#6b7280',
+        color: '#f59e0b',
+        fillColor: '#f59e0b',
         fillOpacity: 0.3,
         weight: 2,
         radius: performanceMode.simplifyMarkers ? 4 : 5,
-        gradientColors: performanceMode.simplifyMarkers 
-          ? ['#6b7280', '#4b5563'] 
-          : ['#6b7280', '#4b5563', '#374151', 'rgba(107, 114, 128, 0.1)'],
+        gradientColors: performanceMode.simplifyMarkers
+          ? ['#f59e0b', '#d97706']
+          : ['#f59e0b', '#d97706', '#b45309', 'rgba(245, 158, 11, 0.1)'],
         pulseAnimation: !performanceMode.reduceAnimations
       },
       other: {

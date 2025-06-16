@@ -236,7 +236,7 @@ body {
 .stat-value.air-defence { color: #3b82f6; }
 .stat-value.electricity { color: #f59e0b; }
 .stat-value.water { color: #8b5cf6; }
-.stat-value.explosion { color: #6b7280; }
+.stat-value.explosion { color: #f59e0b; }
 
 /* Messages Panel */
 .messages-list {
