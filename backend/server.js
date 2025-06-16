@@ -261,21 +261,91 @@ app.get('/api/media/:fileId', async (req, res) => {
     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
     
     console.log('Fetching file from:', fileUrl.replace(botToken, '[TOKEN]'));
+
+    // Determine content type based on file extension
+    const getContentType = (path) => {
+      const ext = path.split('.').pop().toLowerCase();
+      const mimeTypes = {
+        'mp4': 'video/mp4',
+        'mov': 'video/quicktime',
+        'avi': 'video/x-msvideo',
+        'webm': 'video/webm',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      return mimeTypes[ext] || 'application/octet-stream';
+    };
+
+    // First, make a HEAD request to get the file info
+    const headResponse = await axios.head(fileUrl, { timeout: 15000 });
+    let contentType = headResponse.headers['content-type'];
     
-    // Proxy the file from Telegram
-    const fileResponse = await axios.get(fileUrl, { 
-      responseType: 'stream',
-      timeout: 15000 // 15 second timeout
-    });
+    // Override content type for known video files
+    if (filePath.match(/\.(mp4|mov|avi|webm)$/i)) {
+      contentType = getContentType(filePath);
+    }
     
-    // Set appropriate headers
-    res.setHeader('Content-Type', fileResponse.headers['content-type'] || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-    
-    console.log('Successfully proxying file, content-type:', fileResponse.headers['content-type']);
-    
-    // Pipe the file to response
-    fileResponse.data.pipe(res);
+    // Only handle range requests for video files
+    const isVideo = contentType.startsWith('video/') || filePath.match(/\.(mp4|mov|avi|webm)$/i);
+    const range = isVideo ? req.headers.range : null;
+
+    if (isVideo && range) {
+      const fileSize = parseInt(headResponse.headers['content-length'], 10);
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize) {
+        res.status(416).send('Requested range not satisfiable');
+        return;
+      }
+
+      const chunksize = (end - start) + 1;
+      console.log(`Processing video range request: ${start}-${end}/${fileSize}`);
+
+      // Get the specific chunk from Telegram
+      const response = await axios.get(fileUrl, {
+        headers: {
+          Range: `bytes=${start}-${end}`
+        },
+        responseType: 'stream',
+        timeout: 15000
+      });
+
+      // Set response headers for partial content
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400'
+      });
+
+      // Pipe the chunk to response
+      response.data.pipe(res);
+    } else {
+      // For non-video files or when no range is requested, stream normally
+      const fileResponse = await axios.get(fileUrl, { 
+        responseType: 'stream',
+        timeout: 15000
+      });
+      
+      // Set appropriate headers
+      res.setHeader('Content-Type', contentType);
+      if (isVideo) {
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', headResponse.headers['content-length']);
+      }
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      
+      console.log('Successfully proxying file, content-type:', contentType);
+      
+      // Pipe the file to response
+      fileResponse.data.pipe(res);
+    }
     
   } catch (error) {
     console.error('Error fetching media:', error.message);
@@ -291,12 +361,19 @@ app.get('/api/media/:fileId', async (req, res) => {
   }
 });
 
+// Add this before the WebSocket connection handling
+let onlineUsers = 0;
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   console.log('Client connected');
+  onlineUsers++;
+  io.emit('viewer_count_update', onlineUsers);
 
   socket.on('disconnect', () => {
     console.log('Client disconnected');
+    onlineUsers--;
+    io.emit('viewer_count_update', onlineUsers);
   });
 
   // Handle real-time updates
