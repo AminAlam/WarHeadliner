@@ -20,6 +20,8 @@ const io = new Server(httpServer, {
 
 const port = process.env.PORT || 3001;
 
+let viewerCount = 0;
+
 // Database connection helper - creates connection only when needed
 async function createDatabaseConnection() {
   const client = new Client({
@@ -280,14 +282,19 @@ app.get('/api/media/:fileId', async (req, res) => {
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected');
+  viewerCount++;
+  console.log('a user connected. Viewer count:', viewerCount);
+  io.emit('viewer_count_update', viewerCount);
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
+    viewerCount--;
+    console.log('user disconnected. Viewer count:', viewerCount);
+    io.emit('viewer_count_update', viewerCount);
   });
 
   // Handle real-time updates
   socket.on('subscribe', async (filters) => {
+    console.log('Client subscribed to filters:', filters);
     try {
       // Query based on filters
       const whereClause = buildWhereClause(filters);

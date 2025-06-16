@@ -612,6 +612,7 @@ function App() {
   const [bottomMenuDisplayCount, setBottomMenuDisplayCount] = useState(50)
   const [galleryModal, setGalleryModal] = useState({ isOpen: false, images: [], currentIndex: 0 })
   const popupMedia = useRef({})
+  const [viewerCount, setViewerCount] = useState(0);
 
   const isMobile = useMemo(() => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
@@ -985,6 +986,14 @@ function App() {
   useEffect(() => {
     if (socket) {
       socket.emit('subscribe', { hours: timeFilter, types: typeFilter, channels: channelFilter.map(c => c.value) });
+
+      socket.on('viewer_count_update', (count) => {
+        setViewerCount(count);
+      });
+
+      return () => {
+        socket.off('viewer_count_update');
+      };
     }
   }, [timeFilter, typeFilter, channelFilter, socket]);
 
@@ -1337,6 +1346,7 @@ function App() {
           <div className="status-indicator">
             <span className="status-dot active"></span>
             {t('live')}
+            {viewerCount > 0 && <span className="viewer-count">({viewerCount})</span>}
           </div>
         </div>
 

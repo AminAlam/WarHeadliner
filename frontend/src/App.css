@@ -731,14 +731,28 @@ body {
 }
 
 .status-dot.active {
-  background: #10b981;
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
   animation: pulse 2s infinite;
 }
 
+.viewer-count {
+  margin-left: 0.5rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  0% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0.95);
+  }
 }
 
 /* Map Container */
@@ -822,7 +836,7 @@ body {
 .map-legend {
   position: absolute;
   top: 1rem;
-  left: 1rem;
+  right: 1rem;
   background: rgba(30, 41, 59, 0.8);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
