@@ -26,27 +26,64 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20, // max number of clients in the pool
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000, // increased from 2000
+  keepAlive: true, // Enable TCP keepalive
+  keepAliveInitialDelayMillis: 10000, // Send first keepalive probe after 10 seconds of inactivity
+  statement_timeout: 30000,
+  query_timeout: 30000,
+  application_name: 'warheadliner-backend',
 });
 
+// Add reconnection logic
 pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
-  // The pool will automatically remove the client and create a new one.
-  // No need to exit the process.
+  // Don't exit the process, just log the error
 });
 
-// Helper function to execute database queries safely
-async function executeQuery(query, params = []) {
-  const client = await pool.connect();
+// Add connection validation
+async function validateConnection() {
   try {
-    const result = await client.query(query, params);
-    return result;
-  } catch (error) {
-    console.error('Database query error:', error.message);
-    throw error;
-  } finally {
+    const client = await pool.connect();
+    const result = await client.query('SELECT NOW()');
     client.release();
+    console.log('Database connection validated:', result.rows[0]);
+    return true;
+  } catch (err) {
+    console.error('Database connection validation failed:', err);
+    return false;
   }
+}
+
+// Validate connection on startup
+validateConnection().then(isValid => {
+  if (!isValid) {
+    console.error('Initial database connection failed. Please check your configuration.');
+  }
+});
+
+// Helper function to execute database queries safely with retries
+async function executeQuery(query, params = [], retries = 3) {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(query, params);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`Database query error (attempt ${i + 1}/${retries}):`, error.message);
+      // Only retry on connection-related errors
+      if (!error.message.includes('Connection terminated') && 
+          !error.message.includes('Connection timed out')) {
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+    // Wait before retrying
+    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+  }
+  throw lastError;
 }
 
 // Middleware

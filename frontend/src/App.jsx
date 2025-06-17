@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react'
 import axios from 'axios'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap, GeoJSON } from 'react-leaflet'
 import { format } from 'date-fns'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
@@ -10,6 +10,7 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import html2canvas from 'html2canvas'
 import io from 'socket.io-client'
 import Select from 'react-select';
+import iranGeoJSONUrl from './iran.geojson?url';
 
 const socket = io({ path: '/socket.io' });
 
@@ -629,10 +630,10 @@ function App() {
   const [visibleIncidents, setVisibleIncidents] = useState({
     air_attack: true,
     air_defence: true,
-    electricity_shortage: false,
-    water_shortage: false,
+    electricity_shortage: true,
+    water_shortage: true,
     unknown_explosion: true,
-    other: false
+    other: true
   })
   const [isExporting, setIsExporting] = useState(false)
   const [mapBounds, setMapBounds] = useState(null)
@@ -643,6 +644,7 @@ function App() {
   const popupMedia = useRef({})
   const markerRefs = useRef({});
   const [viewerCount, setViewerCount] = useState(0);
+  const [iranBorder, setIranBorder] = useState(null);
 
   const isMobile = useMemo(() => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
@@ -759,14 +761,14 @@ function App() {
         pulseAnimation: !performanceMode.reduceAnimations
       },
       electricity_shortage: {
-        color: '#f59e0b',
-        fillColor: '#f59e0b',
+        color: '#a855f7',
+        fillColor: '#a855f7',
         fillOpacity: 0.3,
         weight: 2,
         radius: performanceMode.simplifyMarkers ? 3 : 4,
         gradientColors: performanceMode.simplifyMarkers 
-          ? ['#f59e0b', '#d97706'] 
-          : ['#f59e0b', '#d97706', '#b45309', 'rgba(245, 158, 11, 0.1)'],
+          ? ['#a855f7', '#9333ea'] 
+          : ['#a855f7', '#9333ea', '#7e22ce', 'rgba(168, 85, 247, 0.1)'],
         pulseAnimation: false
       },
       water_shortage: {
@@ -792,14 +794,14 @@ function App() {
         pulseAnimation: !performanceMode.reduceAnimations
       },
       other: {
-        color: '#64748b',
-        fillColor: '#64748b',
+        color: '#2dd4bf',
+        fillColor: '#2dd4bf',
         fillOpacity: 0.2,
         weight: 2,
         radius: performanceMode.simplifyMarkers ? 2 : 3,
         gradientColors: performanceMode.simplifyMarkers 
-          ? ['#64748b', '#475569'] 
-          : ['#64748b', '#475569', '#334155', 'rgba(100, 116, 139, 0.1)'],
+          ? ['#2dd4bf', '#14b8a6'] 
+          : ['#2dd4bf', '#14b8a6', '#0d9488', 'rgba(45, 212, 191, 0.1)'],
         pulseAnimation: false
       }
     }
@@ -1227,6 +1229,13 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    fetch(iranGeoJSONUrl)
+      .then(response => response.json())
+      .then(data => setIranBorder(data))
+      .catch(error => console.error('Error loading Iran border data:', error));
+  }, []);
+
   if (loading) {
     return (
       <div className="loading">
@@ -1487,6 +1496,7 @@ function App() {
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             />
+            {iranBorder && <GeoJSON data={iranBorder} style={{ color: 'white', weight: 2, opacity: 0.6 }} />}
             {events
               .filter(event => {
                 // Check if ANY of the event's flags match visible incident types
