@@ -6,11 +6,16 @@
 
 **WarHeadliner** is a real-time incident monitoring and visualization platform designed to track, analyze, and display geospatial events with comprehensive media support and advanced filtering capabilities.
 
+![WarHeadliner Screenshot](screenshot.png)
+
+
 ## Overview
 
 WarHeadliner provides real-time monitoring and visualization of incidents through an interactive map interface. The platform aggregates data from multiple sources, processes media content, and presents information in an accessible, multilingual interface supporting both English and Persian languages.
 
 **Live Demo:** [war.AminAlam.info](https://war.AminAlam.info)
+
+
 
 ## Key Features
 

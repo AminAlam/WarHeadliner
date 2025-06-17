@@ -10,6 +10,8 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import html2canvas from 'html2canvas'
 import io from 'socket.io-client'
 import Select from 'react-select';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import iranGeoJSONUrl from './iran.geojson?url';
 
 const socket = io({ path: '/socket.io' });
@@ -538,6 +540,7 @@ const translations = {
     unknownExplosions: 'Unknown Explosions',
     recentMessages: 'Recent Messages',
     timeRange: 'Time Range',
+    dateRange: 'Custom Date Range',
     eventType: 'Event Type',
     allTypes: 'All Types',
     last2Hours: 'Last 2 hours',
@@ -565,7 +568,11 @@ const translations = {
     incidentsInView: 'incidents in view',
     showing: 'showing',
     loadMore: 'Load More',
-    more: 'more'
+    more: 'more',
+    all: 'all',
+    custom: 'custom',
+    selectDate: 'Select Date',
+    resetFilters: 'Reset Filters'
   },
   fa: {
     appTitle: 'مانیتور جنگ ایران-اسرائیل',
@@ -581,6 +588,7 @@ const translations = {
     unknownExplosions: 'انفجارهای نامشخص',
     recentMessages: 'رویدادهای اخیر',
     timeRange: 'بازه زمانی',
+    dateRange: 'بازه تاریخ سفارشی',
     eventType: 'نوع رویداد',
     allTypes: 'همه انواع',
     last2Hours: '۲ ساعت گذشته',
@@ -608,7 +616,11 @@ const translations = {
     incidentsInView: 'رویداد در نمایش',
     showing: 'نمایش',
     loadMore: 'بارگذاری بیشتر',
-    more: 'بیشتر'
+    more: 'بیشتر',
+    all: 'همه',
+    custom: 'سفارشی',
+    selectDate: 'انتخاب تاریخ',
+    resetFilters: 'بازنشانی فیلترها'
   }
 }
 
@@ -645,13 +657,14 @@ function App() {
   const markerRefs = useRef({});
   const [viewerCount, setViewerCount] = useState(0);
   const [iranBorder, setIranBorder] = useState(null);
+  const [dateRange, setDateRange] = useState([null, null]);
 
   const isMobile = useMemo(() => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
            window.innerWidth <= 768
   }, [])
   
-  const [legendOpen, setLegendOpen] = useState(!isMobile)
+  const [legendOpen, setLegendOpen] = useState(true);
   
   // Performance flags for mobile
   const performanceMode = useMemo(() => ({
@@ -695,25 +708,39 @@ function App() {
     }
   }, []) // Empty dependency array ensures this runs only once
 
+  const handleResetFilters = () => {
+    setTimeFilter(24);
+    setTypeFilter('');
+    setChannelFilter([]);
+    setDateRange([null, null]);
+    setSidebarOpen(!sidebarOpen)
+  }
+
+  const [startDate, endDate] = dateRange || [null, null];
+
   useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, performanceMode.reducedUpdateFrequency)
     return () => clearInterval(interval)
-  }, [timeFilter, typeFilter, channelFilter, performanceMode.reducedUpdateFrequency])
+  }, [timeFilter, typeFilter, channelFilter, performanceMode.reducedUpdateFrequency, dateRange])
 
   const fetchData = async () => {
     try {
-      const params = {
-        hours: timeFilter
-      };
+      const params = {};
+
+      if (startDate && endDate) {
+        params.startDate = startDate.toISOString();
+        params.endDate = endDate.toISOString();
+      } else {
+        params.hours = timeFilter;
+      }
+
       if (typeFilter) params.types = typeFilter;
       if (channelFilter.length > 0) {
         params.channels = channelFilter.map(c => c.value).join(',');
       }
 
-      const statsParams = {
-        hours: timeFilter
-      };
+      const statsParams = { ...params };
 
       const [eventsRes, statsRes, messagesRes, channelsRes] = await Promise.all([
         axios.get('/api/events', { params }),
@@ -833,10 +860,6 @@ function App() {
 
   const handlePanelChange = (panel) => {
     setActivePanel(panel)
-    // Only close sidebar on very small screens (mobile phones)
-    // if (window.innerWidth <= 480) {
-    //   setSidebarOpen(false)
-    // }
   }
 
   const loadMoreMessages = async () => {
@@ -1246,9 +1269,9 @@ function App() {
   }
 
   return (
-    <div className={`app ${language === 'fa' ? 'rtl' : 'ltr'}`}>
+    <div className={`app ${language === 'fa' ? 'rtl' : 'ltr'} ${sidebarOpen ? 'sidebar-open' : ''}`}>
       {/* Mobile Overlay */}
-      {sidebarOpen && <div className="overlay" onClick={toggleSidebar}></div>}
+      {sidebarOpen && isMobile && <div className="overlay" onClick={toggleSidebar}></div>}
       
       {/* Sidebar */}
       <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
@@ -1342,8 +1365,12 @@ function App() {
                  <label>{t('timeRange')}</label>
                  <select 
                    value={timeFilter} 
-                   onChange={(e) => setTimeFilter(e.target.value)}
+                   onChange={(e) => {
+                     setTimeFilter(e.target.value);
+                     setDateRange([null, null]);
+                   }}
                    className="filter-select"
+                   disabled={startDate && endDate}
                  >
                    <option value={2}>{t('last2Hours')}</option>
                    <option value={6}>{t('last6Hours')}</option>
@@ -1354,6 +1381,22 @@ function App() {
                  </select>
                </div>
                
+               <div className="filter-group">
+                 <label>{t('dateRange')}</label>
+                 <DatePicker
+                   selectsRange={true}
+                   startDate={startDate}
+                   endDate={endDate}
+                   onChange={(update) => {
+                     setDateRange(update || [null, null]);
+                   }}
+                   isClearable={true}
+                   placeholderText={t('selectDate')}
+                   className="filter-select"
+                   wrapperClassName="date-picker-wrapper"
+                 />
+               </div>
+
                <div className="filter-group">
                  <label>{t('eventType')}</label>
                  <select 
@@ -1382,6 +1425,9 @@ function App() {
                    onChange={setChannelFilter}
                  />
                </div>
+                <button onClick={handleResetFilters} className="reset-filters-btn">
+                  {t('resetFilters')}
+                </button>
              </div>
            )}
         </div>

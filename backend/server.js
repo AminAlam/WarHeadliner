@@ -112,12 +112,20 @@ app.get('/health', async (req, res) => {
 // Get all events with location for map display
 app.get('/api/events', async (req, res) => {
   try {
-    const { hours = 24, types, channels } = req.query;
+    const { hours = 24, types, channels, startDate, endDate } = req.query;
     
     let whereClause = `WHERE latitude IS NOT NULL AND longitude IS NOT NULL`;
-    
-    // Apply time filter unless explicitly set to 'all'
-    if (hours !== 'all') {
+    const queryParams = [];
+
+    // Apply time filter
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        whereClause += ` AND message_timestamp BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`;
+        queryParams.push(start.toISOString(), end.toISOString());
+      }
+    } else if (hours !== 'all') {
       whereClause += ` AND message_timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'`;
     }
     
@@ -167,7 +175,7 @@ app.get('/api/events', async (req, res) => {
       LIMIT 1000
     `;
 
-    const result = await executeQuery(query);
+    const result = await executeQuery(query, queryParams);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -195,11 +203,19 @@ app.get('/api/channels', async (req, res) => {
 // Get statistics
 app.get('/api/stats', async (req, res) => {
   try {
-    const { hours } = req.query; // No default value
+    const { hours, startDate, endDate } = req.query;
 
     let timeFilterQuery = '';
-    // If hours is provided and not 'all', apply the time filter
-    if (hours && hours !== 'all') {
+    const queryParams = [];
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (!isNaN(start) && !isNaN(end)) {
+        timeFilterQuery = `WHERE message_timestamp BETWEEN $1 AND $2`;
+        queryParams.push(start.toISOString(), end.toISOString());
+      }
+    } else if (hours && hours !== 'all') {
       const parsedHours = parseInt(hours, 10);
       if (!isNaN(parsedHours)) {
         timeFilterQuery = `WHERE message_timestamp > NOW() - INTERVAL '${parsedHours} hours'`;
@@ -219,7 +235,7 @@ app.get('/api/stats', async (req, res) => {
       ${timeFilterQuery}
     `;
 
-    const result = await executeQuery(query);
+    const result = await executeQuery(query, queryParams);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching stats:', error);
