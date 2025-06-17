@@ -222,94 +222,6 @@ app.get('/api/messages', async (req, res) => {
   }
 });
 
-// --- START: New dedicated streaming function ---
-async function streamMedia(req, res, fileUrl, isVideo, headResponse) {
-  const range = isVideo ? req.headers.range : null;
-  const filePath = new URL(fileUrl).pathname; // Extract filePath for content-type
-  const getContentType = (path) => {
-    const ext = path.split('.').pop().toLowerCase();
-    const mimeTypes = {
-      'mp4': 'video/mp4', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
-      'webm': 'video/webm', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-      'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'
-    };
-    return mimeTypes[ext] || 'application/octet-stream';
-  };
-  let contentType = headResponse.headers['content-type'];
-  if (filePath.match(/\.(mp4|mov|avi|webm)$/i)) {
-    contentType = getContentType(filePath);
-  }
-
-  // --- Range request ---
-  if (isVideo && range) {
-    const fileSize = parseInt(headResponse.headers['content-length'], 10);
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-    if (start >= fileSize) {
-      res.status(416).send('Requested range not satisfiable');
-      return;
-    }
-
-    const chunksize = (end - start) + 1;
-    const response = await axios.get(fileUrl, {
-      headers: { Range: `bytes=${start}-${end}` },
-      responseType: 'stream',
-      timeout: 15000
-    });
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunksize,
-      'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=86400'
-    });
-
-    response.data.pipe(res);
-    response.data.on('error', (err) => {
-      console.error('Error while piping video chunk:', err.message);
-      if (!res.headersSent) {
-        res.status(500).send('Error during streaming');
-      } else {
-        res.end();
-      }
-    });
-    req.on('close', () => {
-      response.data.destroy();
-    });
-    return;
-  }
-
-  // --- Full file request ---
-  const fileResponse = await axios.get(fileUrl, { 
-    responseType: 'stream',
-    timeout: 15000
-  });
-
-  res.setHeader('Content-Type', contentType);
-  if (isVideo) {
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Content-Length', headResponse.headers['content-length']);
-  }
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  
-  fileResponse.data.pipe(res);
-  fileResponse.data.on('error', (err) => {
-    console.error('Error while piping full file:', err.message);
-    if (!res.headersSent) {
-      res.status(500).send('Error during streaming');
-    } else {
-      res.end();
-    }
-  });
-  req.on('close', () => {
-    fileResponse.data.destroy();
-  });
-}
-// --- END: New dedicated streaming function ---
-
 // Get media from Telegram API
 app.get('/api/media/:fileId', async (req, res) => {
   try {
@@ -326,10 +238,10 @@ app.get('/api/media/:fileId', async (req, res) => {
     
     const fileInfoResponse = await axios.get(telegramApiUrl, { timeout: 15000 });
     
-    if (!fileInfoResponse.data.ok) {
-      console.error('Telegram API error:', fileInfoResponse.data);
+    if (!fileInfoResponse.data.ok || !fileInfoResponse.data.result.file_path) {
+      console.error('Telegram API error or file_path missing:', fileInfoResponse.data);
       return res.status(404).json({ 
-        error: 'File not found on Telegram',
+        error: 'File not found on Telegram or path is missing',
         telegramError: fileInfoResponse.data.description 
       });
     }
@@ -337,38 +249,20 @@ app.get('/api/media/:fileId', async (req, res) => {
     const filePath = fileInfoResponse.data.result.file_path;
     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
     
-    console.log('Fetching file from:', fileUrl.replace(botToken, '[TOKEN]'));
+    // --- START: REDIRECT LOGIC ---
+    // Instead of proxying, redirect the client directly to the temporary Telegram URL.
+    // This offloads all bandwidth usage from our server to Telegram's.
+    res.redirect(302, fileUrl);
+    // --- END: REDIRECT LOGIC ---
 
-    const headResponse = await axios.head(fileUrl, { timeout: 15000 });
-    const isVideo = (headResponse.headers['content-type'] || '').startsWith('video/') || filePath.match(/\.(mp4|mov|avi|webm)$/i);
-    
-    // --- START: Refactored logic to call the new function ---
-    streamMedia(req, res, fileUrl, isVideo, headResponse).catch(error => {
-      console.error('Unhandled error in streamMedia function:', error.message);
-      if (!res.headersSent) {
-        res.status(500).json({ 
-          error: 'Failed to fetch media due to an unhandled streaming error',
-          details: error.message 
-        });
-      } else {
-        // If headers are already sent, we can't send a new status code,
-        // so we just end the response. The client might see a truncated file.
-        res.end();
-      }
-    });
-    // --- END: Refactored logic ---
-    
   } catch (error) {
-    // This will now primarily catch errors from the initial Telegram API calls
-    console.error('Error fetching media file info:', error.message);
-    console.error('Error details:', {
-      response: error.response?.data,
-      status: error.response?.status,
-      url: error.config?.url?.replace(process.env.TELEGRAM_BOT_TOKEN || '', '[TOKEN]')
-    });
+    console.error('Error in /api/media/ handler:', error.message);
+    if (error.response) {
+      console.error('Error details:', { status: error.response.status, data: error.response.data });
+    }
     if (!res.headersSent) {
       res.status(500).json({ 
-        error: 'Failed to fetch media info',
+        error: 'Failed to process media request',
         details: error.message 
       });
     }

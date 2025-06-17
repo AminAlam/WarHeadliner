@@ -187,33 +187,9 @@ const IncidentCard = React.memo(({
                 <div key={media.fileId} className="media-item">
                   {media.isVideo ? (
                     <div className="video-thumbnail" onClick={(e) => handleMediaClick(e, index)}>
-                      <video 
-                        src={media.url} 
-                        muted
-                        playsInline
-                        preload="metadata"
-                        onError={(e) => {
-                          // More graceful error handling - show placeholder instead of hiding
-                          const error = e.target.error || {};
-                          console.warn('Video failed to load:', media.url, `code: ${error.code}`, `message: ${error.message}`)
-                          e.target.style.display = 'none'
-                          // Show error placeholder
-                          const placeholder = document.createElement('div')
-                          placeholder.className = 'video-error-placeholder'
-                          placeholder.innerHTML = '📹'
-                          placeholder.style.cssText = `
-                            width: 100%;
-                            height: 100%;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            background: rgba(107, 114, 128, 0.3);
-                            border-radius: 0.5rem;
-                            font-size: 1.2rem;
-                          `
-                          e.target.parentElement.appendChild(placeholder)
-                        }}
-                      />
+                      <div className="video-placeholder-container">
+                        <div className="video-placeholder-icon">📹</div>
+                      </div>
                       <div className="video-play-icon">▶</div>
                     </div>
                   ) : (
@@ -563,7 +539,7 @@ const translations = {
     timeRange: 'Time Range',
     eventType: 'Event Type',
     allTypes: 'All Types',
-    lastHour: 'Last 1 hour',
+    last2Hours: 'Last 2 hours',
     last6Hours: 'Last 6 hours',
     last12Hours: 'Last 12 hours',
     last24Hours: 'Last 24 hours',
@@ -606,7 +582,7 @@ const translations = {
     timeRange: 'بازه زمانی',
     eventType: 'نوع رویداد',
     allTypes: 'همه انواع',
-    lastHour: '۱ ساعت گذشته',
+    last2Hours: '۲ ساعت گذشته',
     last6Hours: '۶ ساعت گذشته',
     last12Hours: '۱۲ ساعت گذشته',
     last24Hours: '۲۴ ساعت گذشته',
@@ -693,7 +669,7 @@ function App() {
   }, [language])
 
   const timeFilterOptions = useMemo(() => ({
-    1: t('lastHour'),
+    2: t('last2Hours'),
     6: t('last6Hours'),
     12: t('last12Hours'),
     24: t('last24Hours'),
@@ -1360,7 +1336,7 @@ function App() {
                    onChange={(e) => setTimeFilter(e.target.value)}
                    className="filter-select"
                  >
-                   <option value={1}>{t('lastHour')}</option>
+                   <option value={2}>{t('last2Hours')}</option>
                    <option value={6}>{t('last6Hours')}</option>
                    <option value={12}>{t('last12Hours')}</option>
                    <option value={24}>{t('last24Hours')}</option>
