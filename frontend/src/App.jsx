@@ -572,7 +572,8 @@ const translations = {
     all: 'all',
     custom: 'custom',
     selectDate: 'Select Date',
-    resetFilters: 'Reset Filters'
+    resetFilters: 'Reset Filters',
+    toggleLegend: 'Show / Hide Legend'
   },
   fa: {
     appTitle: 'مانیتور جنگ ایران-اسرائیل',
@@ -620,7 +621,8 @@ const translations = {
     all: 'همه',
     custom: 'سفارشی',
     selectDate: 'انتخاب تاریخ',
-    resetFilters: 'بازنشانی فیلترها'
+    resetFilters: 'بازنشانی فیلترها',
+    toggleLegend: 'نمایش / عدم نمایش راهنما'
   }
 }
 
@@ -1454,12 +1456,12 @@ function App() {
         <div className="map-container">
           {/* Legend */}
           <div className={`map-legend ${!legendOpen ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
-            <div className="legend-header" onClick={() => setLegendOpen(!legendOpen)}>
+            <div className="legend-header" onClick={() => setLegendOpen(!legendOpen)} title={t('toggleLegend')}>
               <div className="legend-title-group">
                 <h4>{t('legend')}</h4>
                 {!legendOpen && <span className="legend-timespan-collapsed">({currentTimeFilterLabel})</span>}
               </div>
-              <span className="legend-toggle-icon">{legendOpen ? '▼' : '▲'}</span>
+              <span className="legend-toggle-icon">{legendOpen ? '▲' : '▼'}</span>
             </div>
 
             <div className="legend-content">
