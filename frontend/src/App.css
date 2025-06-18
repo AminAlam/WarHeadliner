@@ -1727,6 +1727,28 @@ body {
   letter-spacing: 0.5px;
 }
 
+.incident-bar-scroll-container {
+  position: relative;
+}
+
+.incident-bar-scroll-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50px;
+  background: linear-gradient(to left, rgba(30, 41, 59, 1), transparent);
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.app.rtl .incident-bar-scroll-container::after {
+  right: auto;
+  left: 0;
+  background: linear-gradient(to right, rgba(30, 41, 59, 1), transparent);
+}
+
 .incident-bar-scroll {
   padding: 0.75rem;
   overflow-x: auto;
@@ -1752,12 +1774,12 @@ body {
 }
 
 .incident-bar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
+  background: rgba(100, 116, 139, 0.6);
   border-radius: 3px;
 }
 
 .incident-bar-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.6);
+  background: rgba(100, 116, 139, 0.8);
 }
 
 .incident-card {
@@ -2146,8 +2168,6 @@ body {
     gap: 0.4rem;
     max-height: 130px;
   }
-  
-
   
   /* Adjust map container to make room for bottom bar */
   .map-container {

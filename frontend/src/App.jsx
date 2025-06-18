@@ -1580,10 +1580,11 @@ function App() {
                   }
                 </h4>
               </div>
-              <div className="incident-bar-scroll">
-                {incidentsInView
-                  .slice(0, bottomMenuDisplayCount) // Show only up to bottomMenuDisplayCount
-                  .map((incident, index) => (
+              <div className="incident-bar-scroll-container">
+                <div className="incident-bar-scroll">
+                  {incidentsInView
+                    .slice(0, bottomMenuDisplayCount) // Show only up to bottomMenuDisplayCount
+                    .map((incident, index) => (
                   <IncidentCard
                     key={incident.id}
                     incident={incident}
@@ -1607,6 +1608,7 @@ function App() {
                     </button>
                   </div>
                 )}
+                </div>
               </div>
             </div>
           )}
