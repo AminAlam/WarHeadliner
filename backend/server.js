@@ -25,19 +25,23 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20, // max number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000, // increased from 2000
+  idleTimeoutMillis: 300000, // how long a client is allowed to remain idle before being closed (5 minutes)
+  connectionTimeoutMillis: 10000, // increased from 5000
   keepAlive: true, // Enable TCP keepalive
-  keepAliveInitialDelayMillis: 10000, // Send first keepalive probe after 10 seconds of inactivity
-  statement_timeout: 30000,
-  query_timeout: 30000,
+  keepAliveInitialDelayMillis: 30000, // Send first keepalive probe after 30 seconds of inactivity
+  statement_timeout: 60000, // Increased from 30000
+  query_timeout: 60000, // Increased from 30000
   application_name: 'warheadliner-backend',
 });
 
 // Add reconnection logic
 pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
-  // Don't exit the process, just log the error
+  // Attempt to reconnect
+  setTimeout(() => {
+    console.log('Attempting to reconnect to database...');
+    validateConnection();
+  }, 5000);
 });
 
 // Add connection validation
@@ -50,6 +54,11 @@ async function validateConnection() {
     return true;
   } catch (err) {
     console.error('Database connection validation failed:', err);
+    // If connection fails, try again after 5 seconds
+    setTimeout(() => {
+      console.log('Retrying database connection...');
+      validateConnection();
+    }, 5000);
     return false;
   }
 }
@@ -65,23 +74,27 @@ validateConnection().then(isValid => {
 async function executeQuery(query, params = [], retries = 3) {
   let lastError;
   for (let i = 0; i < retries; i++) {
-    const client = await pool.connect();
+    let client;
     try {
+      client = await pool.connect();
       const result = await client.query(query, params);
+      client.release();
       return result;
     } catch (error) {
       lastError = error;
+      if (client) client.release();
       console.error(`Database query error (attempt ${i + 1}/${retries}):`, error.message);
+      
       // Only retry on connection-related errors
       if (!error.message.includes('Connection terminated') && 
-          !error.message.includes('Connection timed out')) {
+          !error.message.includes('Connection timed out') &&
+          !error.message.includes('Connection ended unexpectedly')) {
         throw error;
       }
-    } finally {
-      client.release();
+      
+      // Wait before retrying with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, i), 10000)));
     }
-    // Wait before retrying
-    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
   }
   throw lastError;
 }
@@ -389,9 +402,13 @@ function buildWhereClause(filters) {
   return whereClause;
 }
 
-// Use httpServer instead of app.listen
-httpServer.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Replace the last line of the file with this block:
+const workerPort = process.env.NODE_APP_INSTANCE 
+  ? (Number(process.env.PORT) || 3001) + Number(process.env.NODE_APP_INSTANCE)
+  : (Number(process.env.PORT) || 3001);
+
+httpServer.listen(workerPort, () => {
+  console.log(`Server running on port ${workerPort}`);
   console.log('WebSocket server is ready');
   console.log('Database connection pool established');
 });
